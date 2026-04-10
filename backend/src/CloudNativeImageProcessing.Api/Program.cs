@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using CloudNativeImageProcessing.Application.Images;
 using CloudNativeImageProcessing.Infrastructure;
+using CloudNativeImageProcessing.Infrastructure.Options;
 using CloudNativeImageProcessing.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Authorization;
@@ -49,6 +50,14 @@ builder.Services.Configure<BearerTokenOptions>(IdentityConstants.BearerScheme, o
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+var imageProcessingEh = app.Configuration[$"{EventHubOptions.SectionName}:ImageProcessingConnectionString"];
+if (string.IsNullOrWhiteSpace(imageProcessingEh))
+{
+    app.Logger.LogWarning(
+        "{Key} is not set. Image processing events will not be published (no-op publisher). For local dev, run with ASPNETCORE_ENVIRONMENT=Development so appsettings.Development.json is loaded, or set the variable.",
+        $"{EventHubOptions.SectionName}:ImageProcessingConnectionString");
+}
 
 const int maxMigrationAttempts = 10;
 for (var attempt = 1; attempt <= maxMigrationAttempts; attempt++)

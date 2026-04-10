@@ -48,6 +48,12 @@ public sealed class PostgresImageRepository : IImageRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task UpdateAsync(ImageRecord image, CancellationToken cancellationToken)
+    {
+        _dbContext.Images.Update(image);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task DeleteAsync(ImageRecord image, CancellationToken cancellationToken)
     {
         _dbContext.Images.Remove(image);

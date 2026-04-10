@@ -60,4 +60,18 @@ public sealed class LocalBlobStorageService : IBlobStorageService
 
         return Task.CompletedTask;
     }
+
+    public async Task OverwriteAsync(string blobPath, Stream content, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(blobPath))
+        {
+            throw new ArgumentException("Blob path is required.", nameof(blobPath));
+        }
+
+        var normalized = blobPath.Replace('/', Path.DirectorySeparatorChar);
+        var fullPath = Path.Combine(_root, normalized);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        await using var fileStream = File.Create(fullPath);
+        await content.CopyToAsync(fileStream, cancellationToken);
+    }
 }

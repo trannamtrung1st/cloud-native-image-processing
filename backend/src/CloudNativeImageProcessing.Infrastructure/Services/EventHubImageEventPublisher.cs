@@ -6,6 +6,7 @@ using CloudNativeImageProcessing.Application.Images;
 using CloudNativeImageProcessing.Domain.Entities;
 using CloudNativeImageProcessing.Domain.Enums;
 using CloudNativeImageProcessing.Infrastructure.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CloudNativeImageProcessing.Infrastructure.Services;
@@ -19,9 +20,11 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
 
     private readonly EventHubProducerClient? _processingClient;
     private readonly EventHubProducerClient? _aiClient;
+    private readonly ILogger<EventHubImageEventPublisher> _logger;
 
-    public EventHubImageEventPublisher(IOptions<EventHubOptions> options)
+    public EventHubImageEventPublisher(IOptions<EventHubOptions> options, ILogger<EventHubImageEventPublisher> logger)
     {
+        _logger = logger;
         var o = options.Value;
         if (!string.IsNullOrWhiteSpace(o.ImageProcessingConnectionString) &&
             !string.IsNullOrWhiteSpace(o.ImageProcessingHubName))
@@ -29,6 +32,14 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
             _processingClient = new EventHubProducerClient(
                 o.ImageProcessingConnectionString,
                 o.ImageProcessingHubName);
+            _logger.LogInformation(
+                "Event Hub image-processing producer ready (hub={HubName}).",
+                o.ImageProcessingHubName);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Event Hub image-processing producer is not configured (missing connection string or hub name).");
         }
 
         if (!string.IsNullOrWhiteSpace(o.AiDescriptionConnectionString) &&
@@ -42,7 +53,15 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
 
     public async Task PublishImageProcessingRequestedAsync(ImageRecord image, CancellationToken cancellationToken)
     {
-        if (_processingClient is null || image.Operation == ImageOperationType.None)
+        if (_processingClient is null)
+        {
+            _logger.LogWarning(
+                "Skipping image-processing publish for {ImageId}: Event Hub producer not configured.",
+                image.Id);
+            return;
+        }
+
+        if (image.Operation == ImageOperationType.None)
         {
             return;
         }
@@ -55,6 +74,10 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
             image.Name);
 
         await SendAsync(_processingClient, payload, cancellationToken);
+        _logger.LogInformation(
+            "Published image-processing event for image {ImageId}, operation {Operation}.",
+            image.Id,
+            image.Operation);
     }
 
     public async Task PublishAiDescriptionRequestedAsync(

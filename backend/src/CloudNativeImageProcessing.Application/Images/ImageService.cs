@@ -1,6 +1,8 @@
 using CloudNativeImageProcessing.Application.Abstractions;
+using CloudNativeImageProcessing.Application.Options;
 using CloudNativeImageProcessing.Domain.Entities;
 using CloudNativeImageProcessing.Domain.Enums;
+using Microsoft.Extensions.Options;
 
 namespace CloudNativeImageProcessing.Application.Images;
 
@@ -9,15 +11,21 @@ public sealed class ImageService
     private readonly IImageRepository _repository;
     private readonly IBlobStorageService _blobStorage;
     private readonly IImageEventPublisher _eventPublisher;
+    private readonly IImageDetailsCache _detailsCache;
+    private readonly IOptions<DemoOptions> _demoOptions;
 
     public ImageService(
         IImageRepository repository,
         IBlobStorageService blobStorage,
-        IImageEventPublisher eventPublisher)
+        IImageEventPublisher eventPublisher,
+        IImageDetailsCache detailsCache,
+        IOptions<DemoOptions> demoOptions)
     {
         _repository = repository;
         _blobStorage = blobStorage;
         _eventPublisher = eventPublisher;
+        _detailsCache = detailsCache;
+        _demoOptions = demoOptions;
     }
 
     public async Task<PagedResult<ImageDto>> ListAsync(
@@ -42,9 +50,30 @@ public sealed class ImageService
 
     public async Task<ImageDto?> GetAsync(Guid id, string userId, CancellationToken cancellationToken)
     {
+        var cached = await _detailsCache.GetAsync(userId, id, cancellationToken);
+        if (cached is not null)
+        {
+            return cached;
+        }
+
+        var delayMs = ClampDemoDelayMs(_demoOptions.Value.GetByIdDelayMs);
+        if (delayMs > 0)
+        {
+            await Task.Delay(delayMs, cancellationToken);
+        }
+
         var image = await _repository.GetByIdAsync(id, userId, cancellationToken);
-        return image is null ? null : Map(image);
+        if (image is null)
+        {
+            return null;
+        }
+
+        var dto = Map(image);
+        await _detailsCache.SetAsync(userId, id, dto, cancellationToken);
+        return dto;
     }
+
+    private static int ClampDemoDelayMs(int ms) => Math.Clamp(ms, 0, 60_000);
 
     public async Task<ImageDto> CreateAsync(ImageUploadCommand command, string userId, CancellationToken cancellationToken)
     {
@@ -103,8 +132,10 @@ public sealed class ImageService
             return false;
         }
 
-        await _blobStorage.DeleteAsync(image.BlobPath, cancellationToken);
+        // Remove DB row first so the API succeeds even if the blob is already gone (404) or storage is inconsistent.
         await _repository.DeleteAsync(image, cancellationToken);
+        await _detailsCache.RemoveAsync(userId, id, cancellationToken);
+        await _blobStorage.DeleteAsync(image.BlobPath, cancellationToken);
         return true;
     }
 

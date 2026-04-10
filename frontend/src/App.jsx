@@ -12,12 +12,16 @@ const apiUrl = (path) => {
 };
 
 const mapApiImage = (item) => ({
-  id: item.id,
+  id: item.id ?? item.Id,
   name: item.name,
-  uploadedAt: new Date(item.createdAtUtc).toLocaleString(),
+  uploadedAt:
+    item.createdAtUtc != null
+      ? new Date(item.createdAtUtc).toLocaleString()
+      : "—",
   operation: item.operation?.toLowerCase() || "none",
   description: item.description || "No description provided.",
-  status: item.status || "Queued",
+  status: item.status || "Ready",
+  previewUrl: item.previewUrl ?? item.PreviewUrl ?? null,
 });
 
 const isProcessingImage = (item) => (item.status || "").toLowerCase() === "processing";
@@ -149,6 +153,9 @@ function App() {
   const [notifyByEmail, setNotifyByEmail] = useState(true);
   const [lastNotification, setLastNotification] = useState("");
   const [previewImage, setPreviewImage] = useState(null);
+  const [previewDetails, setPreviewDetails] = useState(null);
+  const [previewDetailsLoading, setPreviewDetailsLoading] = useState(false);
+  const [previewDetailsError, setPreviewDetailsError] = useState("");
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -312,12 +319,12 @@ function App() {
       const data = await response.json();
       const payload = Array.isArray(data)
         ? {
-            items: data,
-            page: pageToLoad,
-            pageSize: pageSizeToLoad,
-            totalCount: data.length,
-            totalPages: data.length > 0 ? 1 : 0,
-          }
+          items: data,
+          page: pageToLoad,
+          pageSize: pageSizeToLoad,
+          totalCount: data.length,
+          totalPages: data.length > 0 ? 1 : 0,
+        }
         : data;
 
       const itemList = payload.items ?? payload.Items ?? [];
@@ -414,7 +421,8 @@ function App() {
   const handleDeleteImage = async (id) => {
     try {
       setErrorMessage("");
-      const response = await authFetch(`/api/images/${id}`, {
+      const safeId = encodeURIComponent(String(id));
+      const response = await authFetch(`/api/images/${safeId}`, {
         method: "DELETE",
       });
 
@@ -445,7 +453,61 @@ function App() {
 
   const handleClosePreview = () => {
     setPreviewImage(null);
+    setPreviewDetails(null);
+    setPreviewDetailsError("");
+    setPreviewDetailsLoading(false);
   };
+
+  useEffect(() => {
+    if (!previewImage?.id || !accessToken) {
+      return;
+    }
+
+    let cancelled = false;
+    setPreviewDetails(null);
+    setPreviewDetailsError("");
+    setPreviewDetailsLoading(true);
+
+    (async () => {
+      try {
+        const response = await authFetch(`/api/images/${previewImage.id}`);
+        const bodyText = await response.text();
+        let body;
+        try {
+          body = bodyText ? JSON.parse(bodyText) : null;
+        } catch {
+          body = null;
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          setPreviewDetailsError(
+            parseProblemMessage(body) || `Could not load details (${response.status}).`,
+          );
+          setPreviewDetails(null);
+          return;
+        }
+
+        setPreviewDetails(mapApiImage(body));
+      } catch {
+        if (!cancelled) {
+          setPreviewDetailsError("Could not load image details.");
+          setPreviewDetails(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPreviewDetailsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewImage?.id, accessToken]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -726,6 +788,15 @@ function App() {
             </select>
             <button
               type="button"
+              onClick={() => loadImages(currentPage, pageSize)}
+              disabled={isLoadingImages}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Refresh image list"
+            >
+              {isLoadingImages ? "Refreshing…" : "Refresh"}
+            </button>
+            <button
+              type="button"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage <= 1 || isLoadingImages}
               className="rounded-md border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
@@ -805,23 +876,88 @@ function App() {
           tabIndex={0}
         >
           <div
-            className="relative w-full max-w-4xl rounded-xl bg-white p-3 shadow-xl"
+            className="relative flex max-h-[90vh] w-full max-w-5xl flex-col gap-4 overflow-hidden rounded-xl bg-white p-3 pt-12 shadow-xl md:flex-row md:items-start md:gap-6 md:p-5 md:pt-14"
             onClick={(event) => event.stopPropagation()}
           >
             <button
               type="button"
               onClick={handleClosePreview}
-              className="absolute right-3 top-3 rounded-md bg-slate-900 px-2 py-1 text-sm font-medium text-white hover:bg-slate-700"
+              className="absolute right-3 top-3 z-10 rounded-md bg-slate-900 px-2 py-1 text-sm font-medium text-white hover:bg-slate-700"
             >
               Close
             </button>
-            <AuthenticatedImage
-              imageId={previewImage.id}
-              accessToken={accessToken}
-              alt={`${previewImage.name} full preview`}
-              className="max-h-[80vh] w-full rounded-md object-contain"
-            />
-            <p className="mt-2 text-sm text-slate-600">{previewImage.name}</p>
+            <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+              <AuthenticatedImage
+                imageId={previewImage.id}
+                accessToken={accessToken}
+                alt={`${previewImage.name} full preview`}
+                className="max-h-[min(80vh,720px)] w-full rounded-md object-contain"
+              />
+            </div>
+            <aside className="w-full shrink-0 border-t border-slate-200 pt-4 md:w-72 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+              <h3 className="text-sm font-semibold text-slate-900">Details</h3>
+              {previewDetailsLoading && (
+                <div className="mt-3 space-y-2" aria-busy="true">
+                  <div className="h-4 animate-pulse rounded bg-slate-200" />
+                  <div className="h-4 w-4/5 animate-pulse rounded bg-slate-200" />
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200" />
+                </div>
+              )}
+              {!previewDetailsLoading && previewDetailsError && (
+                <p className="mt-3 text-sm text-rose-600">{previewDetailsError}</p>
+              )}
+              {!previewDetailsLoading && !previewDetailsError && previewDetails && (
+                <dl className="mt-3 space-y-2 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Name
+                    </dt>
+                    <dd className="mt-0.5 text-slate-900">{previewDetails.name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Status
+                    </dt>
+                    <dd className="mt-0.5 text-slate-900">{previewDetails.status}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Operation
+                    </dt>
+                    <dd className="mt-0.5 capitalize text-slate-900">{previewDetails.operation}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Uploaded
+                    </dt>
+                    <dd className="mt-0.5 text-slate-900">{previewDetails.uploadedAt}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Description
+                    </dt>
+                    <dd className="mt-0.5 text-slate-800">{previewDetails.description}</dd>
+                  </div>
+                  {previewDetails.previewUrl ? (
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Preview URL
+                      </dt>
+                      <dd className="mt-0.5 break-all text-blue-700">
+                        <a
+                          href={previewDetails.previewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-blue-900"
+                        >
+                          {previewDetails.previewUrl}
+                        </a>
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              )}
+            </aside>
           </div>
         </div>
       )}

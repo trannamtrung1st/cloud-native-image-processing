@@ -41,6 +41,17 @@ public sealed class InMemoryImageRepository : IImageRepository
         return Task.CompletedTask;
     }
 
+    public Task UpdateAsync(ImageRecord image, CancellationToken cancellationToken)
+    {
+        var i = _images.FindIndex(x => x.Id == image.Id);
+        if (i >= 0)
+        {
+            _images[i] = image;
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task DeleteAsync(ImageRecord image, CancellationToken cancellationToken)
     {
         _images.Remove(image);

@@ -9,4 +9,7 @@ public interface IBlobStorageService
 
     /// <summary>Removes the blob if it exists (idempotent).</summary>
     Task DeleteAsync(string blobPath, CancellationToken cancellationToken);
+
+    /// <summary>Replaces the blob at <paramref name="blobPath"/> with <paramref name="content"/>.</summary>
+    Task OverwriteAsync(string blobPath, Stream content, CancellationToken cancellationToken);
 }

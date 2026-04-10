@@ -8,5 +8,6 @@ public interface IImageRepository
     Task<int> CountByUserAsync(string userId, CancellationToken cancellationToken);
     Task<ImageRecord?> GetByIdAsync(Guid id, string userId, CancellationToken cancellationToken);
     Task AddAsync(ImageRecord image, CancellationToken cancellationToken);
+    Task UpdateAsync(ImageRecord image, CancellationToken cancellationToken);
     Task DeleteAsync(ImageRecord image, CancellationToken cancellationToken);
 }

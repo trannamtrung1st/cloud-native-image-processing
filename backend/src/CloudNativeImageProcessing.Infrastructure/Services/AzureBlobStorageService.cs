@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using CloudNativeImageProcessing.Application.Abstractions;
@@ -56,6 +57,25 @@ public sealed class AzureBlobStorageService : IBlobStorageService
         }
 
         var client = _container.GetBlobClient(blobPath);
-        await client.DeleteIfExistsAsync(cancellationToken: cancellationToken);
+        try
+        {
+            await client.DeleteIfExistsAsync(cancellationToken: cancellationToken);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // Blob already deleted or path mismatch; treat as success for idempotent delete.
+        }
+    }
+
+    public async Task OverwriteAsync(string blobPath, Stream content, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(blobPath))
+        {
+            throw new ArgumentException("Blob path is required.", nameof(blobPath));
+        }
+
+        var client = _container.GetBlobClient(blobPath);
+        await _container.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: cancellationToken);
+        await client.UploadAsync(content, overwrite: true, cancellationToken);
     }
 }

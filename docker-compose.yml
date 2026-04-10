@@ -1,7 +1,9 @@
-# Full stack: includes infrastructure + API + frontend.
+# Full stack: infrastructure + API + workers + frontend.
 #   docker compose up
+#
+# Backend only (no UI container): docker compose -f docker-compose.backend.yml up
 include:
-  - path: docker-compose-infras.yml
+  - path: docker-compose.backend.yml
 
 services:
   frontend:
@@ -15,33 +17,6 @@ services:
       - "5173:80"
     depends_on:
       - api
-    restart: unless-stopped
-    networks:
-      - cnip-infras
-
-  api:
-    build:
-      context: ./backend/src
-      dockerfile: CloudNativeImageProcessing.Api/Dockerfile
-    container_name: cnip-api
-    ports:
-      - "8080:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=cloud_native_image_processing;Username=postgres;Password=postgres
-      BlobStorage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
-      BlobStorage__ContainerName: images
-      EventHubs__ImageProcessingConnectionString: Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=EMULATOR_DEV_SAS_VALUE;UseDevelopmentEmulator=true;
-      EventHubs__ImageProcessingHubName: image-processing
-      EventHubs__AiDescriptionConnectionString: Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=EMULATOR_DEV_SAS_VALUE;UseDevelopmentEmulator=true;
-      EventHubs__AiDescriptionHubName: ai-description
-    depends_on:
-      postgres:
-        condition: service_healthy
-      azurite:
-        condition: service_started
-      eventhubs-emulator:
-        condition: service_started
     restart: unless-stopped
     networks:
       - cnip-infras

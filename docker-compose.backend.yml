@@ -1,0 +1,89 @@
+# API + Event Hub workers + shared infrastructure (no frontend).
+#   docker compose -f docker-compose.backend.yml up -d
+include:
+  - path: docker-compose-infras.yml
+
+services:
+  image-processing-worker:
+    build:
+      context: ./backend/src
+      dockerfile: CloudNativeImageProcessing.Worker/Dockerfile
+    container_name: cnip-image-processing-worker
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=cloud_native_image_processing;Username=postgres;Password=postgres
+      BlobStorage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      BlobStorage__ContainerName: images
+      EventHubs__ImageProcessingConnectionString: Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=EMULATOR_DEV_SAS_VALUE;UseDevelopmentEmulator=true;
+      EventHubs__ImageProcessingHubName: image-processing
+      EventHubs__ImageProcessingConsumerGroup: cg1
+      EventHubs__CheckpointContainerName: eh-checkpoints
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      eventhubs-emulator:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - cnip-infras
+
+  ai-generation-worker:
+    build:
+      context: ./backend/src
+      dockerfile: CloudNativeImageProcessing.AiGenerationWorker/Dockerfile
+    container_name: cnip-ai-generation-worker
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=cloud_native_image_processing;Username=postgres;Password=postgres
+      BlobStorage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      BlobStorage__ContainerName: images
+      EventHubs__AiDescriptionConnectionString: Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=EMULATOR_DEV_SAS_VALUE;UseDevelopmentEmulator=true;
+      EventHubs__AiDescriptionHubName: ai-description
+      EventHubs__AiDescriptionConsumerGroup: cg1
+      EventHubs__CheckpointContainerName: eh-checkpoints
+      Demo__AiDescriptionProcessingDelayMs: 0
+      ComputerVision__Endpoint: ""
+      ComputerVision__ApiKey: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      eventhubs-emulator:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - cnip-infras
+
+  api:
+    build:
+      context: ./backend/src
+      dockerfile: CloudNativeImageProcessing.Api/Dockerfile
+    container_name: cnip-api
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=cloud_native_image_processing;Username=postgres;Password=postgres
+      BlobStorage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      BlobStorage__ContainerName: images
+      EventHubs__ImageProcessingConnectionString: Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=EMULATOR_DEV_SAS_VALUE;UseDevelopmentEmulator=true;
+      EventHubs__ImageProcessingHubName: image-processing
+      EventHubs__AiDescriptionConnectionString: Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=EMULATOR_DEV_SAS_VALUE;UseDevelopmentEmulator=true;
+      EventHubs__AiDescriptionHubName: ai-description
+      Redis__ConnectionString: redis:6379
+      Redis__DetailsExpirationMinutes: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      azurite:
+        condition: service_started
+      eventhubs-emulator:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - cnip-infras
