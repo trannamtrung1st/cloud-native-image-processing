@@ -31,6 +31,9 @@ After authentication, users can upload images and optionally select an image pro
 - **Cache**: Redis
 - **Image storage**: Azure Blob Storage
 - **API gateway**: Azure API Management
+- **CDN**: Azure Front Door
+- **Security**: Azure WAF + Azure DDoS Protection
+- **Monitoring**: Azure Monitor
 - **AI**: Azure Computer Vision
 - **Notification workflow**: Azure Logic Apps for email notifications after upload/processing completion
 - **Local development**: Docker, Docker Compose
