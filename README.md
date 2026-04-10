@@ -2,13 +2,12 @@
 A Cloud-native Image Processing Application
 
 ## Introduction
-This application lets users securely sign in with Azure AD B2C, including social sign-in with Google, and manage a personal image library in the cloud.
+This application lets users securely sign in with local ASP.NET Core Identity and manage a personal image library in the cloud.
 
 After authentication, users can upload images and optionally select an image processing operation before saving. The current supported processing option is grayscale conversion.
 
 ## Features
-- User registration and login with Azure AD B2C
-- Social login support through Google (via Azure AD B2C)
+- User registration and login with local ASP.NET Core Identity
 - Secure user session management and logout
 - Image upload with optional processing during upload
 - Built-in grayscale image processing option
