@@ -1,0 +1,32 @@
+# Copy to terraform.tfvars (do not commit secrets — this file has no secrets by default).
+#   cp terraform.tfvars.example terraform.tfvars
+# Terraform usage, outputs, and destroy: ../README.md (section "Terraform: Azure infrastructure").
+
+resource_group_name = "cnip-rs-group-1"
+location            = "southeastasia"
+prefix              = "cnip"
+
+tags = {
+  project = "cloud-native-image-processing"
+}
+
+aks_node_count = 1
+aks_vm_size    = "Standard_D2s_v3"
+
+# Public ingress-nginx (default true): Azure LB + default public IP + DNS label for HTTP testing. Set false to install ingress manually.
+# enable_public_nginx_ingress = false
+
+# Set true only if ingress LoadBalancer is unreachable because the node subnet NSG blocks LB traffic.
+# aks_subnet_lb_inbound_nsg_hardening = true
+
+# Azure Managed Redis (Terraform azurerm_managed_redis)
+managed_redis_sku_name            = "Balanced_B1"
+managed_redis_high_availability   = false
+
+# Must match the Helm install namespace when using Key Vault + workload identity.
+kubernetes_namespace   = "cnip"
+workload_service_account_name = "cnip-workload"
+
+# Stored in Key Vault as secrets (optional; leave empty if not using Computer Vision yet).
+computer_vision_endpoint = "https://YOUR_RESOURCE.cognitiveservices.azure.com/"
+computer_vision_api_key  = "YOUR_KEY"

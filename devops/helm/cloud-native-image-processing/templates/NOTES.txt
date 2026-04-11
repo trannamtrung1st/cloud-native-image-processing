@@ -1,0 +1,10 @@
+{{- if .Values.keyVault.enabled }}
+1. Key Vault path: CSI + workload identity syncs Azure Key Vault into Secret "{{ .Values.secrets.existingSecretName }}". An init container mounts the CSI volume first so that Secret usually exists before app containers use envFrom. If you still see "secret not found", check workload identity (federated credential subject = system:serviceaccount:{{ .Release.Namespace }}:{{ .Values.keyVault.serviceAccountName }}), Key Vault access, and `kubectl describe pod` / CSI driver logs.
+{{- else }}
+1. Ensure the secret "{{ .Values.secrets.existingSecretName }}" exists in namespace "{{ .Release.Namespace }}" before pods can start (create with kubectl before install — see devops/README.md). This chart does not create that Secret when keyVault.enabled is false.
+{{- end }}
+2. API: http://{{ include "cnip.fullname" . }}-api:{{ .Values.api.service.port }} (in-cluster)
+{{- if .Values.ingress.enabled }}
+3. Ingress host(s):{{- range .Values.ingress.hosts }} {{ .host }}{{- end }}{{- if .Values.ingress.className }} (class: {{ .Values.ingress.className }}){{- end }}
+{{- end }}
+4. Build the frontend image with VITE_API_BASE_URL pointing at the public URL where /api is served (same scheme+host as Ingress, e.g. http://cnip.demo.local for defaults).

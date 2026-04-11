@@ -2,16 +2,27 @@
 #   docker compose up
 #
 # Backend only (no UI container): docker compose -f docker-compose.backend.yml up
+#
+# Azure/ACR: export CNIP_* in the shell (see devops/scripts/export-compose-env-from-terraform.sh) or use Compose defaults for local-only tags. Build/push app images:
+#   docker compose build api image-processing-worker ai-generation-worker frontend
+#   docker compose push api image-processing-worker ai-generation-worker frontend
+x-build-linux-amd64: &build-linux-amd64
+  platforms:
+    - linux/amd64
+
 include:
   - path: docker-compose.backend.yml
 
 services:
   frontend:
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-frontend:${CNIP_IMAGE_TAG:-1}
+    platform: linux/amd64
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      <<: *build-linux-amd64
       args:
-        VITE_API_BASE_URL: http://localhost:8080
+        VITE_API_BASE_URL: ${CNIP_PUBLIC_APP_URL:-http://localhost:8080}
     container_name: cnip-frontend
     ports:
       - "5173:80"

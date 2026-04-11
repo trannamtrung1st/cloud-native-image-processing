@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cloud-native-image-processing
+description: Helm chart for CNIP API, workers, and optional frontend on Kubernetes (AKS / generic).
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

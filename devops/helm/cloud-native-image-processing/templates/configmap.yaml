@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cnip.configMapName" . }}
+  labels:
+    {{- include "cnip.labels" . | nindent 4 }}
+data:
+  ASPNETCORE_ENVIRONMENT: {{ .Values.config.aspnetcoreEnvironment | quote }}
+  DOTNET_ENVIRONMENT: {{ .Values.config.dotnetEnvironment | quote }}
+  BlobStorage__ContainerName: {{ .Values.config.blobStorage.containerName | quote }}
+  EventHubs__ImageProcessingHubName: {{ .Values.config.eventHubs.imageProcessingHubName | quote }}
+  EventHubs__ImageProcessingConsumerGroup: {{ .Values.config.eventHubs.imageProcessingConsumerGroup | quote }}
+  EventHubs__AiDescriptionHubName: {{ .Values.config.eventHubs.aiDescriptionHubName | quote }}
+  EventHubs__AiDescriptionConsumerGroup: {{ .Values.config.eventHubs.aiDescriptionConsumerGroup | quote }}
+  EventHubs__CheckpointContainerName: {{ .Values.config.eventHubs.checkpointContainerName | quote }}
+  Demo__GetByIdDelayMs: {{ .Values.config.demo.getByIdDelayMs | quote }}
+  Demo__GrayscaleProcessingDelayMs: {{ .Values.config.demo.grayscaleProcessingDelayMs | quote }}
+  Demo__AiDescriptionProcessingDelayMs: {{ .Values.config.demo.aiDescriptionProcessingDelayMs | quote }}
+  Upload__MaxRequestBodyBytes: {{ .Values.config.upload.maxRequestBodyBytes | quote }}
+  Identity__BearerTokenExpirationHours: {{ .Values.config.identity.bearerTokenExpirationHours | quote }}
+  Redis__DetailsExpirationMinutes: {{ .Values.config.redis.detailsExpirationMinutes | quote }}
+  {{- range $i, $origin := .Values.config.cors.allowedOrigins }}
+  Cors__AllowedOrigins__{{ $i }}: {{ $origin | quote }}
+  {{- end }}

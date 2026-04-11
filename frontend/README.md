@@ -1,16 +1,35 @@
-# React + Vite
+# Frontend — React + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SPA for **cloud-native-image-processing**: auth, image library, upload, and processing status. Calls the .NET API under `/api` (configure base URL for each environment).
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 20+ (or the version pinned in CI / `.nvmrc` if present)
+- npm
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+From `frontend/`:
 
-## Expanding the ESLint configuration
+```bash
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Set **`VITE_API_BASE_URL`** to where the API is reachable (e.g. `http://localhost:8080` if the API is on another port, or rely on `docker-compose.yml` build args / Vite defaults).
+
+## Production build
+
+The Docker image is built at the **repository root** with a build-arg so the SPA bakes in the public API URL (see [`../devops/README.md`](../devops/README.md) — ACR / frontend build steps).
+
+```bash
+export PUBLIC_APP_URL="https://your-host"   # no trailing slash
+docker build -t your-registry/cnip-frontend:1 \
+  --build-arg "VITE_API_BASE_URL=${PUBLIC_APP_URL}" \
+  -f Dockerfile .
+```
+
+## More documentation
+
+- Monorepo overview: [`../README.md`](../README.md)
+- Azure, Terraform, Helm: [`../devops/README.md`](../devops/README.md)

@@ -1,12 +1,9 @@
 # cloud-native-image-processing
-A Cloud-native Image Processing Application
 
-## Introduction
-This application lets users securely sign in with local ASP.NET Core Identity and manage a personal image library in the cloud.
-
-After authentication, users can upload images and optionally select an image processing operation before saving. The current supported processing option is grayscale conversion.
+Cloud-native image library: users sign in with **ASP.NET Core Identity**, upload images, optionally apply processing (e.g. grayscale), and get **AI-generated descriptions** (Azure Computer Vision). Images and metadata live in **Azure Blob Storage** and **PostgreSQL**; processing is driven by **Event Hubs** workers.
 
 ## Features
+
 - User registration and login with local ASP.NET Core Identity
 - Secure user session management and logout
 - Image upload with optional processing during upload
@@ -19,22 +16,24 @@ After authentication, users can upload images and optionally select an image pro
   - Delete images
   - Upload additional images anytime
 
-## Architecture
-- **Components**: UI, Web API, Image Processing Worker, AI Description Generation Worker
-- **Frontend/UI**: React SPA
-- **Backend**: .NET 10
-- **API**: ASP.NET Core Web API
-- **Code structure**: Clean Architecture
-- **Database/Data access**: PostgreSQL, EF Core
-- **Queue**: Event Grid + Queue Storage
-- **Cache**: Redis
-- **Image storage**: Azure Blob Storage
-- **API gateway**: Azure API Management
-- **CDN**: Azure Front Door
-- **Security**: Azure WAF + Azure DDoS Protection
-- **Monitoring**: Azure Monitor
-- **AI**: Azure Computer Vision
-- **Notification workflow**: Azure Logic Apps for email notifications after upload/processing completion
-- **Local development**: Docker, Docker Compose
-- **Deployment**: Helm + Kubernetes with cloud-native Azure services
-- **Infrastructure as Code (IaC)**: Terraform to provision and automate Azure services deployment
+## Architecture (summary)
+
+| Area               | Choice                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| UI                 | React (Vite) SPA — [`frontend/README.md`](frontend/README.md)                                                                                    |
+| API & workers      | .NET 10, Clean Architecture — [`backend/src/README.md`](backend/src/README.md)                                                                   |
+| Containers         | Docker images for API, workers, and frontend (build/push details in [`devops/README.md`](devops/README.md))                                      |
+| Local stack        | **Docker Compose** — `docker-compose.yml`, `docker-compose.backend.yml`, `docker-compose-infra.yml` (see [`devops/README.md`](devops/README.md)) |
+| Production compute | **Azure Kubernetes Service (AKS)** — workloads deployed with **Helm** (`devops/helm/cloud-native-image-processing`)                              |
+| Data               | PostgreSQL (EF Core), **Azure Managed Redis**, Azure Blob Storage                                                                                |
+| Messaging          | Azure Event Hubs (`image-processing`, `ai-description`; local emulator in Compose)                                                               |
+| Production edge    | Azure API Management, Front Door, WAF/DDoS (typical reference design)                                                                            |
+| Notifications      | Azure Logic Apps (email after upload/processing)                                                                                                 |
+| Observability      | Azure Monitor                                                                                                                                    |
+| AI                 | Azure Computer Vision (image description)                                                                                                        |
+
+## Operations and deployment
+
+**Use a single guide:** [`devops/README.md`](devops/README.md). It covers Terraform for Azure, Helm for Kubernetes, Docker Compose (shell exports from Terraform for ACR and public URL, plus image tag), Key Vault + workload identity + CSI, and post-apply steps—including the [end-to-end secrets flow](devops/README.md#end-to-end-secrets-flow-terraform-key-vault-workload-identity-csi-helm-environment-variables) diagram.
+
+For UI or backend development details only, see the component READMEs linked in the table above.

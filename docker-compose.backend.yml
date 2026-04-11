@@ -1,13 +1,24 @@
 # API + Event Hub workers + shared infrastructure (no frontend).
 #   docker compose -f docker-compose.backend.yml up -d
+#
+# Image names target ACR when CNIP_ACR_LOGIN_SERVER is set (e.g. source devops/scripts/export-compose-env-from-terraform.sh from repo root).
+# Build / push for AKS: docker compose -f docker-compose.backend.yml build api image-processing-worker ai-generation-worker
+#   && docker compose -f docker-compose.backend.yml push api image-processing-worker ai-generation-worker
+x-build-linux-amd64: &build-linux-amd64
+  platforms:
+    - linux/amd64
+
 include:
   - path: docker-compose-infra.yml
 
 services:
   image-processing-worker:
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-worker:${CNIP_IMAGE_TAG:-1}
+    platform: linux/amd64
     build:
       context: ./backend/src
       dockerfile: CloudNativeImageProcessing.Worker/Dockerfile
+      <<: *build-linux-amd64
     container_name: cnip-image-processing-worker
     environment:
       DOTNET_ENVIRONMENT: Development
@@ -30,9 +41,12 @@ services:
       - cnip-infra
 
   ai-generation-worker:
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-aiworker:${CNIP_IMAGE_TAG:-1}
+    platform: linux/amd64
     build:
       context: ./backend/src
       dockerfile: CloudNativeImageProcessing.AiGenerationWorker/Dockerfile
+      <<: *build-linux-amd64
     container_name: cnip-ai-generation-worker
     environment:
       DOTNET_ENVIRONMENT: Development
@@ -58,9 +72,12 @@ services:
       - cnip-infra
 
   api:
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-api:${CNIP_IMAGE_TAG:-1}
+    platform: linux/amd64
     build:
       context: ./backend/src
       dockerfile: CloudNativeImageProcessing.Api/Dockerfile
+      <<: *build-linux-amd64
     container_name: cnip-api
     ports:
       - "8080:8080"

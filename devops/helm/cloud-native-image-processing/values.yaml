@@ -1,0 +1,167 @@
+# Default values — local / demo Kubernetes (ingress-nginx). Azure: copy values-azure.example.yaml
+# to values-azure.yaml, set ACR / ingress / Key Vault from Terraform, then helm -f values.yaml -f values-azure.yaml
+nameOverride: ""
+fullnameOverride: ""
+
+# Optional: when set, prepended to any *.image.repository that does not already contain "/" (registry/repo).
+# Takes precedence over global.imageRegistry. Often set from the shell: --set-string acrLoginServer="$(terraform ... output -raw acr_login_server)".
+global:
+  imageRegistry: ""
+
+# ACR login server only (e.g. myregistry.azurecr.io). When set, short *.image.repository values become {acrLoginServer}/{repository}:{tag}.
+# Ignored if a repository already includes "/" (full registry/repo in values). Same host as Compose export CNIP_ACR_LOGIN_SERVER from Terraform.
+acrLoginServer: ""
+
+imagePullSecrets: []
+
+# Non-sensitive config (ASP.NET Core env: Section__Key)
+config:
+  aspnetcoreEnvironment: Production
+  dotnetEnvironment: Production
+  blobStorage:
+    containerName: images
+  eventHubs:
+    imageProcessingHubName: image-processing
+    imageProcessingConsumerGroup: cg1
+    aiDescriptionHubName: ai-description
+    aiDescriptionConsumerGroup: cg1
+    checkpointContainerName: eh-checkpoints
+  # Demo artificial delays (ms); use small non-zero values in workshops to make steps visible; keep "0" normally.
+  demo:
+    getByIdDelayMs: "0"
+    grayscaleProcessingDelayMs: "0"
+    aiDescriptionProcessingDelayMs: "0"
+  upload:
+    maxRequestBodyBytes: "10485760"
+  identity:
+    bearerTokenExpirationHours: "8"
+  redis:
+    detailsExpirationMinutes: "5"
+  # CORS origins for API (index-based env vars). Include every browser origin you use (Ingress hostname, LB IP, Azure cloudapp URL).
+  cors:
+    allowedOrigins:
+      - "http://cnip.demo.local"
+
+# One Kubernetes Secret with ASP.NET Core-style keys (Section__Subsection__Key).
+# - keyVault.enabled=false: create manually (kubectl) before install — see devops/README.md.
+# - keyVault.enabled=true: Secrets Store CSI syncs from Azure Key Vault into this secret name (do not create it manually).
+secrets:
+  existingSecretName: cnip-app-secrets
+
+# Azure Key Vault + workload identity + AKS Secrets Store CSI (enabled on AKS by Terraform).
+# Default false so local/minikube renders without Terraform outputs; Azure: set true in an overlay
+# (e.g. values-azure.example.yaml) or pass --set-string keyVault.* from terraform output.
+# When enabled: chart installs ServiceAccount + SecretProviderClass; CSI syncs KV objects into
+# secrets.existingSecretName (do not create that Secret manually). KV secret names must match Terraform:
+# postgres-connection-string, blob-storage-connection-string, eventhub-connection-string-image-processing,
+# eventhub-connection-string-ai-description, redis-connection-string, computer-vision-endpoint, computer-vision-api-key.
+# serviceAccountName must match Terraform variable workload_service_account_name (default cnip-workload);
+# Helm release namespace must match kubernetes_namespace (default cnip) for the federated credential subject.
+keyVault:
+  enabled: false
+  tenantId: ""
+  vaultName: ""
+  workloadIdentityClientId: ""
+  secretProviderClassName: cnip-akv
+  serviceAccountName: cnip-workload
+  # When enabled, an init container mounts the CSI volume first so secretObjects sync creates secrets.existingSecretName before app containers resolve envFrom (avoids CreateContainerConfigError: secret not found).
+  initContainer:
+    image: busybox:1.36
+
+api:
+  enabled: true
+  # Use 1 until ASP.NET Data Protection / token signing is shared across pods (see devops/README.md).
+  replicaCount: 1
+  image:
+    repository: cloud-native-image-processing-api
+    tag: "1.0.3-cnip"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+worker:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: cloud-native-image-processing-worker
+    tag: "1.0.3-cnip"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+aiWorker:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: cloud-native-image-processing-aiworker
+    tag: "1.0.3-cnip"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: cloud-native-image-processing-frontend
+    tag: "1.0.3-cnip"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
+
+ingress:
+  enabled: true
+  # Requires ingress-nginx: https://kubernetes.github.io/ingress-nginx/deploy/
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+  # Map cnip.demo.local to the ingress controller IP (or LB hostname) in /etc/hosts for a quick demo.
+  # Empty host (second rule) matches requests by public IP or any Host header (required for http://<LB_IP>/).
+  hosts:
+    - host: cnip.demo.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: frontend
+    - host: ""
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls: []
+  #  - secretName: cnip-tls
+  #    hosts: [cnip.demo.local]
