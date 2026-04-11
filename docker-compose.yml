@@ -19,4 +19,4 @@ services:
       - api
     restart: unless-stopped
     networks:
-      - cnip-infras
+      - cnip-infra

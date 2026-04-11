@@ -1,7 +1,7 @@
 # API + Event Hub workers + shared infrastructure (no frontend).
 #   docker compose -f docker-compose.backend.yml up -d
 include:
-  - path: docker-compose-infras.yml
+  - path: docker-compose-infra.yml
 
 services:
   image-processing-worker:
@@ -27,7 +27,7 @@ services:
         condition: service_started
     restart: unless-stopped
     networks:
-      - cnip-infras
+      - cnip-infra
 
   ai-generation-worker:
     build:
@@ -55,7 +55,7 @@ services:
         condition: service_started
     restart: unless-stopped
     networks:
-      - cnip-infras
+      - cnip-infra
 
   api:
     build:
@@ -86,4 +86,4 @@ services:
         condition: service_started
     restart: unless-stopped
     networks:
-      - cnip-infras
+      - cnip-infra

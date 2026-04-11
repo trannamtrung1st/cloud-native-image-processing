@@ -79,8 +79,9 @@ public sealed class AiGenerationEventHandler
 
         if (!ComputerVisionOptions.IsConfigured(_computerVisionOptions.Value))
         {
-            image.Description = NotConnectedDescription;
-            await _repository.UpdateAsync(image, cancellationToken).ConfigureAwait(false);
+            await _repository
+                .UpdateDescriptionAsync(image.Id, image.UserId, NotConnectedDescription, cancellationToken)
+                .ConfigureAwait(false);
             _logger.LogInformation(
                 "Set placeholder AI description for image {ImageId} (Computer Vision not configured).",
                 evt.ImageId);
@@ -96,8 +97,9 @@ public sealed class AiGenerationEventHandler
         if (string.IsNullOrWhiteSpace(image.BlobPath))
         {
             _logger.LogWarning("Image {ImageId} has no blob path; cannot call Computer Vision.", evt.ImageId);
-            image.Description = VisionNoCaptionDescription;
-            await _repository.UpdateAsync(image, cancellationToken).ConfigureAwait(false);
+            await _repository
+                .UpdateDescriptionAsync(image.Id, image.UserId, VisionNoCaptionDescription, cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
 
@@ -105,14 +107,15 @@ public sealed class AiGenerationEventHandler
         if (blobStream is null)
         {
             _logger.LogWarning("Blob not found for image {ImageId} at path {BlobPath}.", evt.ImageId, image.BlobPath);
-            image.Description = VisionNoCaptionDescription;
-            await _repository.UpdateAsync(image, cancellationToken).ConfigureAwait(false);
+            await _repository
+                .UpdateDescriptionAsync(image.Id, image.UserId, VisionNoCaptionDescription, cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
 
         var caption = await _computerVision.GetDescriptionFromImageAsync(blobStream, cancellationToken).ConfigureAwait(false);
-        image.Description = string.IsNullOrWhiteSpace(caption) ? VisionNoCaptionDescription : caption;
-        await _repository.UpdateAsync(image, cancellationToken).ConfigureAwait(false);
+        var description = string.IsNullOrWhiteSpace(caption) ? VisionNoCaptionDescription : caption;
+        await _repository.UpdateDescriptionAsync(image.Id, image.UserId, description, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation(
             "Updated AI description for image {ImageId} from Computer Vision v3.2.",
             evt.ImageId);

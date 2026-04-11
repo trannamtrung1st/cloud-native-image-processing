@@ -1,6 +1,6 @@
 # Infrastructure for local dev: Postgres, Redis, Azurite (blob), Azure Event Hubs emulator.
 # API on the host: use appsettings.Development.json (localhost + ports below).
-#   docker compose -f docker-compose-infras.yml up -d
+#   docker compose -f docker-compose-infra.yml up -d
 #
 # Event Hubs emulator:
 # https://learn.microsoft.com/en-us/azure/event-hubs/overview-emulator
@@ -24,7 +24,7 @@ services:
       retries: 10
     restart: unless-stopped
     networks:
-      - cnip-infras
+      - cnip-infra
 
   redis:
     image: redis:7.4-alpine
@@ -33,7 +33,7 @@ services:
       - "6379:6379"
     restart: unless-stopped
     networks:
-      - cnip-infras
+      - cnip-infra
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
@@ -47,7 +47,7 @@ services:
     command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --location /data --debug /data/debug.log
     restart: unless-stopped
     networks:
-      cnip-infras:
+      cnip-infra:
         aliases:
           - azurite
 
@@ -68,12 +68,12 @@ services:
       - ./infra/eventhubs-emulator/Config.json:/Eventhubs_Emulator/ConfigFiles/Config.json:ro
     restart: unless-stopped
     networks:
-      cnip-infras:
+      cnip-infra:
         aliases:
           - eventhubs-emulator
 
 networks:
-  cnip-infras:
+  cnip-infra:
     driver: bridge
 
 volumes:

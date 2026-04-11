@@ -52,6 +52,28 @@ public sealed class InMemoryImageRepository : IImageRepository
         return Task.CompletedTask;
     }
 
+    public Task UpdateStatusAsync(Guid id, string userId, string status, CancellationToken cancellationToken)
+    {
+        var image = _images.FirstOrDefault(x => x.Id == id && x.UserId == userId);
+        if (image is not null)
+        {
+            image.Status = status;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateDescriptionAsync(Guid id, string userId, string description, CancellationToken cancellationToken)
+    {
+        var image = _images.FirstOrDefault(x => x.Id == id && x.UserId == userId);
+        if (image is not null)
+        {
+            image.Description = description;
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task DeleteAsync(ImageRecord image, CancellationToken cancellationToken)
     {
         _images.Remove(image);

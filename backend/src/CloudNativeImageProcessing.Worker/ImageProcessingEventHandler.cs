@@ -76,8 +76,7 @@ public sealed class ImageProcessingEventHandler
         if (!string.Equals(evt.Operation, nameof(ImageOperationType.Grayscale), StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogWarning("Unsupported image operation {Operation} for {ImageId}.", evt.Operation, evt.ImageId);
-            record.Status = "Failed";
-            await _repository.UpdateAsync(record, cancellationToken);
+            await _repository.UpdateStatusAsync(record.Id, record.UserId, "Failed", cancellationToken);
             return;
         }
 
@@ -87,8 +86,7 @@ public sealed class ImageProcessingEventHandler
             if (readStream is null)
             {
                 _logger.LogWarning("Blob missing for image {ImageId} at {BlobPath}.", evt.ImageId, evt.BlobPath);
-                record.Status = "Failed";
-                await _repository.UpdateAsync(record, cancellationToken);
+                await _repository.UpdateStatusAsync(record.Id, record.UserId, "Failed", cancellationToken);
                 return;
             }
 
@@ -112,16 +110,14 @@ public sealed class ImageProcessingEventHandler
 
             await _blobStorage.OverwriteAsync(evt.BlobPath, output, cancellationToken);
 
-            record.Status = "Ready";
-            await _repository.UpdateAsync(record, cancellationToken);
+            await _repository.UpdateStatusAsync(record.Id, record.UserId, "Ready", cancellationToken);
 
             _logger.LogInformation("Processed image {ImageId} ({Operation}).", evt.ImageId, evt.Operation);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process image {ImageId}.", evt.ImageId);
-            record.Status = "Failed";
-            await _repository.UpdateAsync(record, cancellationToken);
+            await _repository.UpdateStatusAsync(record.Id, record.UserId, "Failed", cancellationToken);
         }
     }
 

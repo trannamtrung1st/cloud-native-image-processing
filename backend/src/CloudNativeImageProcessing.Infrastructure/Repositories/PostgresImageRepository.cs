@@ -54,6 +54,20 @@ public sealed class PostgresImageRepository : IImageRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public Task UpdateStatusAsync(Guid id, string userId, string status, CancellationToken cancellationToken) =>
+        _dbContext.Images
+            .Where(x => x.Id == id && x.UserId == userId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(x => x.Status, status),
+                cancellationToken);
+
+    public Task UpdateDescriptionAsync(Guid id, string userId, string description, CancellationToken cancellationToken) =>
+        _dbContext.Images
+            .Where(x => x.Id == id && x.UserId == userId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(x => x.Description, description),
+                cancellationToken);
+
     public async Task DeleteAsync(ImageRecord image, CancellationToken cancellationToken)
     {
         _dbContext.Images.Remove(image);
