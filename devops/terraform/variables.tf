@@ -130,3 +130,50 @@ variable "computer_vision_api_key" {
   default     = ""
   sensitive   = true
 }
+
+variable "enable_azure_front_door" {
+  type        = bool
+  description = "Deploy Azure Front Door (Premium) with WAF (managed Default Rule Set) in front of the ingress public hostname. Requires enable_public_nginx_ingress. Adds cost."
+  default     = false
+}
+
+variable "frontdoor_waf_mode" {
+  type        = string
+  description = "WAF policy mode: Detection (log only) or Prevention (block)."
+  default     = "Prevention"
+
+  validation {
+    condition     = contains(["Detection", "Prevention"], var.frontdoor_waf_mode)
+    error_message = "frontdoor_waf_mode must be Detection or Prevention."
+  }
+}
+
+variable "frontdoor_waf_default_rule_set_version" {
+  type        = string
+  description = "Managed Default Rule Set version for type DefaultRuleSet. Use 1.0 or preview-0.1 (azurerm provider does not support 2.x for this type)."
+  default     = "1.0"
+}
+
+variable "enable_network_ddos_protection_plan" {
+  type        = bool
+  description = "Create an Azure Network DDoS Protection Plan in this region (high cost). Associate it with a VNet or protected public IPs in Azure Portal or extend Terraform."
+  default     = false
+}
+
+variable "enable_azure_monitor" {
+  type        = bool
+  description = "Create a Log Analytics workspace and stream platform diagnostics from AKS, Key Vault, and (optionally) ACR. Log ingestion has per-GB cost."
+  default     = true
+}
+
+variable "log_analytics_retention_in_days" {
+  type        = number
+  description = "Log Analytics workspace retention in days (30–730 for paid tiers)."
+  default     = 30
+}
+
+variable "enable_azure_monitor_acr_diagnostics" {
+  type        = bool
+  description = "When enable_azure_monitor is true, also send Container Registry diagnostics to the workspace."
+  default     = true
+}

@@ -27,7 +27,7 @@ Cloud-native image library: users sign in with **ASP.NET Core Identity**, upload
 | Production compute | **Azure Kubernetes Service (AKS)** — workloads deployed with **Helm** (`devops/helm/cloud-native-image-processing`)                              |
 | Data               | PostgreSQL (EF Core), **Azure Managed Redis**, Azure Blob Storage                                                                                |
 | Messaging          | Azure Event Hubs (`image-processing`, `ai-description`; local emulator in Compose)                                                               |
-| Production edge    | Azure API Management, Front Door, WAF/DDoS (typical reference design)                                                                            |
+| Production edge    | Azure Front Door, WAF/DDoS (typical reference design)                                                                                              |
 | Notifications      | Azure Logic Apps (email after upload/processing)                                                                                                 |
 | Observability      | Azure Monitor                                                                                                                                    |
 | AI                 | Azure Computer Vision (image description)                                                                                                        |

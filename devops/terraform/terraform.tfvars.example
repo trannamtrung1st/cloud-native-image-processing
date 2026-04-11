@@ -16,6 +16,18 @@ aks_vm_size    = "Standard_D2s_v3"
 # Public ingress-nginx (default true): Azure LB + default public IP + DNS label for HTTP testing. Set false to install ingress manually.
 # enable_public_nginx_ingress = false
 
+# Azure Front Door (Premium) + WAF in front of the ingress hostname; requires public ingress. Adds cost.
+enable_azure_front_door = true
+frontdoor_waf_mode = "Detection"  # or Prevention (default in variables.tf)
+
+# Network DDoS Protection Plan (per region, high cost); associate with a VNet or public IPs separately.
+enable_network_ddos_protection_plan = true
+
+# Azure Monitor: Log Analytics workspace + diagnostics for AKS, Key Vault, ACR (default on; ingestion billed per GB).
+enable_azure_monitor = false
+log_analytics_retention_in_days = 30
+enable_azure_monitor_acr_diagnostics = false
+
 # Set true only if ingress LoadBalancer is unreachable because the node subnet NSG blocks LB traffic.
 # aks_subnet_lb_inbound_nsg_hardening = true
 

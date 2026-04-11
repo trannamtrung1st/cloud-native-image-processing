@@ -163,3 +163,33 @@ output "cnip_frontend_docker_build_args_hint" {
   ])) : null
   description = "Example docker build arguments: VITE_BASE_URL is the public origin for Vite base; empty VITE_API_BASE_URL keeps /api on the same host via ingress."
 }
+
+output "cdn_frontdoor_endpoint_host_name" {
+  value       = length(azurerm_cdn_frontdoor_endpoint.main) > 0 ? azurerm_cdn_frontdoor_endpoint.main[0].host_name : null
+  description = "Public hostname of the Front Door endpoint (e.g. *.azurefd.net). Point app DNS/CORS here when Front Door is enabled."
+}
+
+output "cdn_frontdoor_endpoint_url" {
+  value       = length(azurerm_cdn_frontdoor_endpoint.main) > 0 ? "https://${azurerm_cdn_frontdoor_endpoint.main[0].host_name}" : null
+  description = "HTTPS URL for the Front Door endpoint (use for browser origin / Helm ingress when using Front Door)."
+}
+
+output "cdn_frontdoor_profile_name" {
+  value       = length(azurerm_cdn_frontdoor_profile.main) > 0 ? azurerm_cdn_frontdoor_profile.main[0].name : null
+  description = "Azure Front Door profile name (when enable_azure_front_door is true)."
+}
+
+output "network_ddos_protection_plan_id" {
+  value       = length(azurerm_network_ddos_protection_plan.main) > 0 ? azurerm_network_ddos_protection_plan.main[0].id : null
+  description = "Resource ID of the Network DDoS Protection Plan when enable_network_ddos_protection_plan is true. Associate with a VNet or public IPs for Network DDoS Protection."
+}
+
+output "log_analytics_workspace_id" {
+  value       = length(azurerm_log_analytics_workspace.main) > 0 ? azurerm_log_analytics_workspace.main[0].id : null
+  description = "Azure resource ID of the Log Analytics workspace (Azure Monitor / Log Analytics queries)."
+}
+
+output "log_analytics_workspace_customer_id" {
+  value       = length(azurerm_log_analytics_workspace.main) > 0 ? azurerm_log_analytics_workspace.main[0].workspace_id : null
+  description = "Workspace (customer) ID for Log Analytics agents and cross-resource queries."
+}

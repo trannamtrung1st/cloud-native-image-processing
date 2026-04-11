@@ -21,7 +21,7 @@ locals {
   ) : null
   # Azure RM returns region as a slug (e.g. southeastasia) on resource group / cluster.
   ingress_cloudapp_region = replace(lower(trimspace(azurerm_resource_group.main.location)), " ", "")
-  ingress_fqdn = var.enable_public_nginx_ingress ? "${local.ingress_dns_label}.${local.ingress_cloudapp_region}.cloudapp.azure.com" : null
+  ingress_fqdn            = var.enable_public_nginx_ingress ? "${local.ingress_dns_label}.${local.ingress_cloudapp_region}.cloudapp.azure.com" : null
   # Populated after Azure assigns the ingress Service external IP (may be null on first plan).
   ingress_lb_ip = var.enable_public_nginx_ingress ? try(
     data.kubernetes_service.ingress_nginx[0].status[0].load_balancer[0].ingress[0].ip,

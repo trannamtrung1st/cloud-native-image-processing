@@ -5,7 +5,7 @@ This file is the **only** README under `devops/` (Helm and Terraform are documen
 
 | Path                                                                         | Purpose                                                                                                                                         |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[terraform/](terraform/)`                                                   | Azure infrastructure as code (resource group, ACR, AKS, data plane, Key Vault, workload identity)                                               |
+| `[terraform/](terraform/)`                                                   | Azure infrastructure as code (resource group, ACR, AKS, data plane, Key Vault, workload identity; optional Front Door + WAF in `frontdoor.tf`; Azure Monitor in `monitoring.tf`) |
 | `[scripts/](scripts/)`                                                       | `export-compose-env-from-terraform.sh` — `source` from repo root to set `CNIP_ACR_LOGIN_SERVER` / `CNIP_PUBLIC_APP_URL` from `terraform output` |
 | `[helm/cloud-native-image-processing/](helm/cloud-native-image-processing/)` | Kubernetes chart for **API**, **image-processing worker**, **AI description worker**, and optional **frontend** (nginx + static build)          |
 
@@ -56,7 +56,7 @@ Install **Helm into the same namespace** as Terraform `kubernetes_namespace` (de
 
 ## Terraform: Azure infrastructure (`terraform/`)
 
-IaC for: resource group, ACR, AKS, PostgreSQL, Redis, Storage, Event Hubs, **Key Vault**, secrets, user-assigned identity, and federated credential for workload identity.
+IaC for: resource group, ACR, AKS, PostgreSQL, Redis, Storage, Event Hubs, **Key Vault**, secrets, user-assigned identity, federated credential, optional **Azure Front Door + WAF**, optional **Network DDoS Protection** plan, and **Azure Monitor** (Log Analytics + resource diagnostics).
 
 ### Resources created
 
@@ -75,11 +75,14 @@ IaC for: resource group, ACR, AKS, PostgreSQL, Redis, Storage, Event Hubs, **Key
 | `azurerm_eventhub_namespace_authorization_rule`         | Send/listen policy for app connection strings                                                                |
 | `azurerm_key_vault` + secrets                           | Postgres, blob, Event Hubs (two KV secrets → two app env vars), Redis, Computer Vision endpoint/key          |
 | `azurerm_user_assigned_identity` + federated credential | Workload identity for AKS pods → Key Vault **Secrets User**                                                  |
+| `azurerm_cdn_frontdoor_*` (optional)                    | **Front Door (Premium)** + **WAF** (managed Default Rule Set) in front of the ingress hostname (`enable_azure_front_door`, requires `enable_public_nginx_ingress`) |
+| `azurerm_network_ddos_protection_plan` (optional)       | **Network DDoS Protection** plan (`enable_network_ddos_protection_plan`); associate with a VNet or public IPs separately |
+| `azurerm_log_analytics_workspace` + diagnostics (optional) | **Azure Monitor** backbone: Log Analytics workspace; AKS / Key Vault / ACR platform logs and metrics (`enable_azure_monitor`, default **true**) |
 
 
 AKS enables **OIDC issuer**, **workload identity**, and the **Azure Key Vault Secrets Provider** add-on (`key_vault_secrets_provider`).
 
-**Not created by this stack** (add or extend separately): the **Computer Vision Azure resource** itself (only `computer_vision_`* variables populate Key Vault), DNS, Front Door, Log Analytics, private endpoints, VNet integration for Postgres/Redis.
+**Not created by this stack** (add or extend separately): the **Computer Vision Azure resource** itself (only `computer_vision_`* variables populate Key Vault), custom DNS zones, private endpoints, VNet integration for Postgres/Redis. **Front Door** and **DDoS plan** are optional via `terraform.tfvars` (see `terraform.tfvars.example`). **Application Insights** for app-level APM is not deployed here (add separately or instrument the app); this stack provides **platform** diagnostics into Log Analytics.
 
 ### Prerequisites
 
@@ -330,7 +333,9 @@ Register a user via `/api/auth/register` (or the SPA), upload an image, confirm 
 
 ## Optional: Azure Front Door
 
-Front Door can sit in front of the ingress for global routing, TLS, and WAF. **Do not enable shared caching** for authenticated `/api/images/.../preview` routes unless you redesign around signed blob URLs (see project discussion). Configuration is Azure-side, not in this Helm chart.
+Terraform can deploy **Front Door (Premium)** with a **WAF** (managed Default Rule Set) in front of the ingress hostname when **`enable_azure_front_door = true`** (requires **`enable_public_nginx_ingress = true`**). Use **`terraform output -raw cdn_frontdoor_endpoint_url`** for the public HTTPS origin; align Helm **`ingress.hosts`**, **`config.cors.allowedOrigins`**, and frontend build args with that host. **`enable_network_ddos_protection_plan`** creates a **Network DDoS Protection** plan (associate it with a VNet or protected public IPs in Azure).
+
+The chart does not add a `cache` block on the Front Door route so edge caching stays off for dynamic API traffic. **Do not enable shared caching** for authenticated `/api/images/.../preview` routes unless you redesign around signed blob URLs (see project discussion).
 
 ---
 

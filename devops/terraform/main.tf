@@ -100,6 +100,11 @@ resource "azurerm_postgresql_flexible_server" "main" {
   sku_name                      = var.postgres_sku_name
   public_network_access_enabled = true
   tags                          = var.tags
+
+  # Azure assigns zone after create; changing zone without HA standby swap is rejected by the API.
+  lifecycle {
+    ignore_changes = [zone]
+  }
 }
 
 resource "azurerm_postgresql_flexible_server_database" "app" {
