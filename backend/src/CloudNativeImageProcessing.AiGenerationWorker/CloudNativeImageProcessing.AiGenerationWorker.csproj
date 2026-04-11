@@ -4,6 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>CloudNativeImageProcessing.AiGenerationWorker</RootNamespace>
+    <!-- Same UserSecretsId as Api / Worker: one `dotnet user-secrets` store (run from any of the three projects). -->
+    <UserSecretsId>f8c3d21a-b5e4-4c9a-a1f2-0e7d6c5b4a39</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Messaging.EventHubs.Processor" Version="5.11.5" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.5" />
   </ItemGroup>
 
   <ItemGroup>

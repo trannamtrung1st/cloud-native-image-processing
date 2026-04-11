@@ -87,6 +87,28 @@ public static class DependencyInjection
         return services;
     }
 
+    /// <summary>
+    /// Infrastructure for the AI description worker host: worker persistence and blobs, plus Computer Vision v3.2 HTTP client.
+    /// </summary>
+    public static IServiceCollection AddAiGenerationWorkerInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddWorkerInfrastructure(configuration);
+        services.AddComputerVisionV32Client();
+        return services;
+    }
+
+    /// <summary>Registers Computer Vision v3.2 HTTP client for the AI description worker.</summary>
+    public static IServiceCollection AddComputerVisionV32Client(this IServiceCollection services)
+    {
+        services.AddHttpClient<IComputerVisionDescriptionClient, ComputerVisionV32DescriptionClient>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(120);
+        });
+        return services;
+    }
+
     private static bool HasEventHub(IConfiguration configuration)
     {
         var eh = configuration.GetSection(EventHubOptions.SectionName);

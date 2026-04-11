@@ -3,6 +3,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Shared with Worker / AiGenerationWorker so one `dotnet user-secrets` store holds Azure keys and connection strings for local dev. -->
+    <UserSecretsId>f8c3d21a-b5e4-4c9a-a1f2-0e7d6c5b4a39</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
