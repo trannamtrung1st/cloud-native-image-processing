@@ -7,11 +7,20 @@ using CloudNativeImageProcessing.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+{
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        options.EnableAdaptiveSampling = false;
+    });
+}
 
 var bearerTokenExpirationHours = builder.Configuration.GetValue<long?>("Identity:BearerTokenExpirationHours") ?? 8;
 var uploadMaxRequestBytes = builder.Configuration.GetValue<long>("Upload:MaxRequestBodyBytes", 10L * 1024 * 1024);
@@ -49,6 +58,14 @@ builder.Services.Configure<BearerTokenOptions>(IdentityConstants.BearerScheme, o
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddHttpLogging(options =>
+{
+    options.LoggingFields = HttpLoggingFields.RequestMethod
+        | HttpLoggingFields.RequestPath
+        | HttpLoggingFields.ResponseStatusCode
+        | HttpLoggingFields.Duration;
+});
+
 var app = builder.Build();
 
 var imageProcessingEh = app.Configuration[$"{EventHubOptions.SectionName}:ImageProcessingConnectionString"];
@@ -67,6 +84,7 @@ for (var attempt = 1; attempt <= maxMigrationAttempts; attempt++)
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ImageDbContext>();
         await dbContext.Database.MigrateAsync();
+        app.Logger.LogInformation("Database migrations applied.");
         break;
     }
     catch when (attempt < maxMigrationAttempts)
@@ -81,6 +99,10 @@ if (urls.Contains("https:", StringComparison.OrdinalIgnoreCase))
 {
     app.UseHttpsRedirection();
 }
+
+app.UseWhen(
+    ctx => !ctx.Request.Path.StartsWithSegments("/health"),
+    branch => branch.UseHttpLogging());
 
 app.UseCors("FrontendPolicy");
 app.UseAuthentication();

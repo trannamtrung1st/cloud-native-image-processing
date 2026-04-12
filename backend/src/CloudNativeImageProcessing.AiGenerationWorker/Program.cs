@@ -9,6 +9,14 @@ if (builder.Environment.IsDevelopment())
     builder.Configuration.AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true);
 }
 
+if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+{
+    builder.Services.AddApplicationInsightsTelemetryWorkerService(options =>
+    {
+        options.EnableAdaptiveSampling = false;
+    });
+}
+
 builder.Services.AddAiGenerationWorkerInfrastructure(builder.Configuration);
 builder.Services.AddScoped<AiGenerationEventHandler>();
 builder.Services.AddHostedService<AiGenerationWorkerHostedService>();

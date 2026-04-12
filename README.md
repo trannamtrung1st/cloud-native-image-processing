@@ -29,11 +29,11 @@ Cloud-native image library: users sign in with **ASP.NET Core Identity**, upload
 | Messaging          | Azure Event Hubs (`image-processing`, `ai-description`; local emulator in Compose)                                                               |
 | Production edge    | Azure Front Door, WAF/DDoS (typical reference design)                                                                                              |
 | Notifications      | Azure Logic Apps (email after upload/processing)                                                                                                 |
-| Observability      | Azure Monitor                                                                                                                                    |
+| Observability      | Azure Monitor (Log Analytics, AKS diagnostics + Container Insights, optional Application Insights for app telemetry)                               |
 | AI                 | Azure Computer Vision (image description)                                                                                                        |
 
 ## Operations and deployment
 
-**Use a single guide:** [`devops/README.md`](devops/README.md). It covers Terraform for Azure, Helm for Kubernetes, Docker Compose (shell exports from Terraform for ACR and public URL, plus image tag), Key Vault + workload identity + CSI, and post-apply steps—including the [end-to-end secrets flow](devops/README.md#end-to-end-secrets-flow-terraform-key-vault-workload-identity-csi-helm-environment-variables) diagram.
+**Use a single guide:** [`devops/README.md`](devops/README.md) — **local** Docker Compose steps and **production** Terraform → scripts → Helm (Key Vault only, no manual cluster secrets).
 
 For UI or backend development details only, see the component READMEs linked in the table above.

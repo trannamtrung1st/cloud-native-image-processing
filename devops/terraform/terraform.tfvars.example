@@ -2,7 +2,7 @@
 #   cp terraform.tfvars.example terraform.tfvars
 # Terraform usage, outputs, and destroy: ../README.md (section "Terraform: Azure infrastructure").
 
-resource_group_name = "cnip-rs-group-1"
+resource_group_name = "cnip-rs-group"
 location            = "southeastasia"
 prefix              = "cnip"
 
@@ -17,16 +17,21 @@ aks_vm_size    = "Standard_D2s_v3"
 # enable_public_nginx_ingress = false
 
 # Azure Front Door (Premium) + WAF in front of the ingress hostname; requires public ingress. Adds cost.
-enable_azure_front_door = true
+enable_azure_front_door = false
 frontdoor_waf_mode = "Detection"  # or Prevention (default in variables.tf)
 
 # Network DDoS Protection Plan (per region, high cost); associate with a VNet or public IPs separately.
-enable_network_ddos_protection_plan = true
+enable_network_ddos_protection_plan = false
 
 # Azure Monitor: Log Analytics workspace + diagnostics for AKS, Key Vault, ACR (default on; ingestion billed per GB).
-enable_azure_monitor = false
+# AKS oms_agent enables Container Insights; optional Application Insights stores app telemetry in the same workspace.
+enable_azure_monitor = true
 log_analytics_retention_in_days = 30
-enable_azure_monitor_acr_diagnostics = false
+enable_azure_monitor_acr_diagnostics = true
+enable_application_insights = true
+# application_insights_name = "my-custom-name"  # optional; default is {prefix}-appinsights
+
+# If enable_azure_monitor is false, set enable_application_insights = false as well.
 
 # Set true only if ingress LoadBalancer is unreachable because the node subnet NSG blocks LB traffic.
 # aks_subnet_lb_inbound_nsg_hardening = true
@@ -40,5 +45,5 @@ kubernetes_namespace   = "cnip"
 workload_service_account_name = "cnip-workload"
 
 # Stored in Key Vault as secrets (optional; leave empty if not using Computer Vision yet).
-computer_vision_endpoint = "https://YOUR_RESOURCE.cognitiveservices.azure.com/"
-computer_vision_api_key  = "YOUR_KEY"
+computer_vision_endpoint = ""
+computer_vision_api_key  = ""

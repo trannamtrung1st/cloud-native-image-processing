@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Source from the repository root so Docker Compose picks up the exports:
 #   . devops/scripts/export-compose-env-from-terraform.sh
-#   export CNIP_IMAGE_TAG=1.0.3-cnip   # must match Helm image tags; not from Terraform
+#   export CNIP_IMAGE_TAG=1.0.5-cnip   # must match Helm image tags; not from Terraform
 #   docker compose build … && docker compose push …
 #
 # Sets: CNIP_ACR_LOGIN_SERVER, CNIP_PUBLIC_APP_URL (browser origin for frontend build).
@@ -42,5 +42,5 @@ echo "  CNIP_PUBLIC_APP_URL=${CNIP_PUBLIC_APP_URL}"
 if [[ -n "${CNIP_IMAGE_TAG:-}" ]]; then
   echo "  CNIP_IMAGE_TAG=${CNIP_IMAGE_TAG}"
 else
-  echo "  CNIP_IMAGE_TAG=(not set — export before docker compose build/push, e.g. export CNIP_IMAGE_TAG=1.0.3-cnip)"
+  echo "  CNIP_IMAGE_TAG=(not set — export before docker compose build/push, e.g. export CNIP_IMAGE_TAG=1.0.5-cnip)"
 fi

@@ -193,3 +193,19 @@ output "log_analytics_workspace_customer_id" {
   value       = length(azurerm_log_analytics_workspace.main) > 0 ? azurerm_log_analytics_workspace.main[0].workspace_id : null
   description = "Workspace (customer) ID for Log Analytics agents and cross-resource queries."
 }
+
+output "application_insights_name" {
+  value       = length(azurerm_application_insights.main) > 0 ? azurerm_application_insights.main[0].name : null
+  description = "Application Insights resource name (Azure portal / az monitor)."
+}
+
+output "application_insights_connection_string" {
+  value       = length(azurerm_application_insights.main) > 0 ? azurerm_application_insights.main[0].connection_string : null
+  sensitive   = true
+  description = "Application Insights connection string (also in Key Vault as application-insights-connection-string). ILogger traces appear in workspace Kusto table AppTraces (often after 2–5 minutes)."
+}
+
+output "application_insights_log_analytics_workspace_id" {
+  value       = length(azurerm_application_insights.main) > 0 ? azurerm_log_analytics_workspace.main[0].id : null
+  description = "Log Analytics workspace resource ID where workspace-based App Insights stores telemetry (Kusto: AppTraces, AppRequests)."
+}

@@ -2,6 +2,7 @@ using CloudNativeImageProcessing.Application.Abstractions;
 using CloudNativeImageProcessing.Application.Options;
 using CloudNativeImageProcessing.Domain.Entities;
 using CloudNativeImageProcessing.Domain.Enums;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CloudNativeImageProcessing.Application.Images;
@@ -13,19 +14,22 @@ public sealed class ImageService
     private readonly IImageEventPublisher _eventPublisher;
     private readonly IImageDetailsCache _detailsCache;
     private readonly IOptions<DemoOptions> _demoOptions;
+    private readonly ILogger<ImageService> _logger;
 
     public ImageService(
         IImageRepository repository,
         IBlobStorageService blobStorage,
         IImageEventPublisher eventPublisher,
         IImageDetailsCache detailsCache,
-        IOptions<DemoOptions> demoOptions)
+        IOptions<DemoOptions> demoOptions,
+        ILogger<ImageService> logger)
     {
         _repository = repository;
         _blobStorage = blobStorage;
         _eventPublisher = eventPublisher;
         _detailsCache = detailsCache;
         _demoOptions = demoOptions;
+        _logger = logger;
     }
 
     public async Task<PagedResult<ImageDto>> ListAsync(
@@ -36,6 +40,8 @@ public sealed class ImageService
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
+
+        _logger.LogDebug("Listing images for user {UserId} page={Page} pageSize={PageSize}.", userId, page, pageSize);
 
         var totalCount = await _repository.CountByUserAsync(userId, cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -53,6 +59,7 @@ public sealed class ImageService
         var cached = await _detailsCache.GetAsync(userId, id, cancellationToken);
         if (cached is not null)
         {
+            _logger.LogDebug("Image details cache hit for {ImageId}.", id);
             return cached;
         }
 
@@ -65,6 +72,7 @@ public sealed class ImageService
         var image = await _repository.GetByIdAsync(id, userId, cancellationToken);
         if (image is null)
         {
+            _logger.LogDebug("Get image {ImageId}: not found for user {UserId}.", id, userId);
             return null;
         }
 
@@ -121,6 +129,14 @@ public sealed class ImageService
             await _eventPublisher.PublishAiDescriptionRequestedAsync(image, manualDescription, cancellationToken);
         }
 
+        _logger.LogInformation(
+            "Image created {ImageId} for user {UserId}: operation={Operation}, useAiDescription={UseAi}, status={Status}.",
+            image.Id,
+            userId,
+            operation,
+            command.UseAiDescription,
+            image.Status);
+
         return Map(image);
     }
 
@@ -129,6 +145,7 @@ public sealed class ImageService
         var image = await _repository.GetByIdAsync(id, userId, cancellationToken);
         if (image is null)
         {
+            _logger.LogDebug("Delete skipped: image {ImageId} not found for user {UserId}.", id, userId);
             return false;
         }
 
@@ -136,6 +153,7 @@ public sealed class ImageService
         await _repository.DeleteAsync(image, cancellationToken);
         await _detailsCache.RemoveAsync(userId, id, cancellationToken);
         await _blobStorage.DeleteAsync(image.BlobPath, cancellationToken);
+        _logger.LogInformation("Image {ImageId} deleted for user {UserId}.", id, userId);
         return true;
     }
 
@@ -148,12 +166,17 @@ public sealed class ImageService
         var image = await _repository.GetByIdAsync(id, userId, cancellationToken);
         if (image is null)
         {
+            _logger.LogDebug("Preview: image {ImageId} not found for user {UserId}.", id, userId);
             return null;
         }
 
         var stream = await _blobStorage.OpenReadAsync(image.BlobPath, cancellationToken);
         if (stream is null)
         {
+            _logger.LogWarning(
+                "Preview blob missing or unreadable for image {ImageId} at {BlobPath}.",
+                id,
+                image.BlobPath);
             return null;
         }
 

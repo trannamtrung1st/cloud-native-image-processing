@@ -80,6 +80,15 @@ resource "azurerm_kubernetes_cluster" "main" {
     network_plugin    = "kubenet"
     load_balancer_sku = "standard"
   }
+
+  # Azure Monitor / Container Insights: ships node + cluster metrics and container logs to Log Analytics.
+  # https://learn.microsoft.com/azure/azure-monitor/containers/container-insights-overview
+  dynamic "oms_agent" {
+    for_each = var.enable_azure_monitor ? [1] : []
+    content {
+      log_analytics_workspace_id = azurerm_log_analytics_workspace.main[0].id
+    }
+  }
 }
 
 resource "azurerm_role_assignment" "aks_acr_pull" {

@@ -1,5 +1,5 @@
-# Default values — local / demo Kubernetes (ingress-nginx). Azure: copy values-azure.example.yaml
-# to values-azure.yaml, set ACR / ingress / Key Vault from Terraform, then helm -f values.yaml -f values-azure.yaml
+# Default values — local / demo Kubernetes (ingress-nginx). For Azure AKS: use this file and pass
+# --set keyVault.enabled=true --set applicationInsights.enabled=true --set-string acrLoginServer=... --set-string keyVault.* from terraform output (see devops/README.md).
 nameOverride: ""
 fullnameOverride: ""
 
@@ -49,14 +49,18 @@ secrets:
   existingSecretName: cnip-app-secrets
 
 # Azure Key Vault + workload identity + AKS Secrets Store CSI (enabled on AKS by Terraform).
-# Default false so local/minikube renders without Terraform outputs; Azure: set true in an overlay
-# (e.g. values-azure.example.yaml) or pass --set-string keyVault.* from terraform output.
+# Default false so local/minikube renders without Terraform outputs; Azure: --set keyVault.enabled=true and --set-string keyVault.* from terraform output.
 # When enabled: chart installs ServiceAccount + SecretProviderClass; CSI syncs KV objects into
 # secrets.existingSecretName (do not create that Secret manually). KV secret names must match Terraform:
 # postgres-connection-string, blob-storage-connection-string, eventhub-connection-string-image-processing,
-# eventhub-connection-string-ai-description, redis-connection-string, computer-vision-endpoint, computer-vision-api-key.
+# eventhub-connection-string-ai-description, redis-connection-string, computer-vision-endpoint, computer-vision-api-key,
+# and optionally application-insights-connection-string (when applicationInsights.enabled).
 # serviceAccountName must match Terraform variable workload_service_account_name (default cnip-workload);
 # Helm release namespace must match kubernetes_namespace (default cnip) for the federated credential subject.
+# Enable when Terraform created Application Insights and Key Vault secret application-insights-connection-string.
+applicationInsights:
+  enabled: false
+
 keyVault:
   enabled: false
   tenantId: ""
@@ -74,7 +78,7 @@ api:
   replicaCount: 1
   image:
     repository: cloud-native-image-processing-api
-    tag: "1.0.3-cnip"
+    tag: "1.0.5-cnip"
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -92,7 +96,7 @@ worker:
   replicaCount: 1
   image:
     repository: cloud-native-image-processing-worker
-    tag: "1.0.3-cnip"
+    tag: "1.0.5-cnip"
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -107,7 +111,7 @@ aiWorker:
   replicaCount: 1
   image:
     repository: cloud-native-image-processing-aiworker
-    tag: "1.0.3-cnip"
+    tag: "1.0.5-cnip"
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -122,7 +126,7 @@ frontend:
   replicaCount: 1
   image:
     repository: cloud-native-image-processing-frontend
-    tag: "1.0.3-cnip"
+    tag: "1.0.5-cnip"
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
