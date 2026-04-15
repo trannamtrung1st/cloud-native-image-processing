@@ -96,10 +96,28 @@ resource "azurerm_cdn_frontdoor_endpoint" "main" {
   tags                     = var.tags
 }
 
-resource "azurerm_cdn_frontdoor_route" "main" {
+resource "azurerm_cdn_frontdoor_route" "api" {
   count = local.afd_enabled ? 1 : 0
 
-  name                          = "${var.prefix}-route"
+  name                          = "${var.prefix}-api-route"
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.main[0].id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.aks_ingress[0].id
+  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.aks_ingress[0].id]
+  enabled                       = true
+  forwarding_protocol           = "HttpOnly"
+  https_redirect_enabled        = true
+  link_to_default_domain        = true
+  patterns_to_match             = ["/api", "/api/*"]
+  supported_protocols           = ["Http", "Https"]
+
+  # Keep API uncached; route only /api paths here.
+  depends_on = [azurerm_cdn_frontdoor_origin.aks_ingress]
+}
+
+resource "azurerm_cdn_frontdoor_route" "frontend" {
+  count = local.afd_enabled ? 1 : 0
+
+  name                          = "${var.prefix}-frontend-route"
   cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.main[0].id
   cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.aks_ingress[0].id
   cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.aks_ingress[0].id]
@@ -110,7 +128,23 @@ resource "azurerm_cdn_frontdoor_route" "main" {
   patterns_to_match             = ["/*"]
   supported_protocols           = ["Http", "Https"]
 
-  # No cache {} block — avoid caching authenticated /api and dynamic content at the edge.
+  # Cache frontend responses at the edge while API stays uncached via the dedicated /api route.
+  cache {
+    query_string_caching_behavior = "IgnoreQueryString"
+    compression_enabled           = true
+    content_types_to_compress = [
+      "text/plain",
+      "text/html",
+      "text/css",
+      "text/javascript",
+      "application/javascript",
+      "application/json",
+      "application/xml",
+      "image/svg+xml",
+      "font/woff2"
+    ]
+  }
+
   depends_on = [azurerm_cdn_frontdoor_origin.aks_ingress]
 }
 
@@ -134,7 +168,8 @@ resource "azurerm_cdn_frontdoor_security_policy" "waf" {
   }
 
   depends_on = [
-    azurerm_cdn_frontdoor_route.main,
+    azurerm_cdn_frontdoor_route.api,
+    azurerm_cdn_frontdoor_route.frontend,
     azurerm_cdn_frontdoor_firewall_policy.main,
   ]
 }
