@@ -26,6 +26,8 @@
 # Optional repository variables:
 #   K8S_NAMESPACE                     Default: cnip (must match Terraform kubernetes_namespace)
 #   HELM_APPLICATION_INSIGHTS_ENABLED Set to "false" if Terraform has enable_application_insights = false
+#   GITHUB_DEPLOY_ENVIRONMENT          GitHub Actions Environment name for this workflow (default: Production).
+#                                     Create it under Settings > Environments to use environment-scoped secrets / protection rules.
 #
 # Optional workflow_dispatch inputs let you override image tag or skip image build (Helm only).
 
@@ -59,7 +61,20 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ vars.GITHUB_DEPLOY_ENVIRONMENT || 'Production' }}
     steps:
+      - name: Deployment context
+        run: |
+          echo "github_actions_environment=${{ environment.name }}"
+          echo "github_repository=${{ github.repository }}"
+          echo "github_ref=${{ github.ref }}"
+          echo "github_sha=${{ github.sha }}"
+          echo "github_event_name=${{ github.event_name }}"
+          echo "github_actor=${{ github.actor }}"
+          echo "github_run_id=${{ github.run_id }}"
+          echo "github_run_attempt=${{ github.run_attempt }}"
+
       - name: Checkout
         uses: actions/checkout@v4
 

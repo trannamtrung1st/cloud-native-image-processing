@@ -20,8 +20,10 @@
 #   TF_STATE_CONTAINER        Blob container name (e.g. tfstate)
 #   TF_STATE_KEY              State blob key (e.g. cnip.terraform.tfstate)
 #
-# Repository variable:
-#   TERRAFORM_USE_REMOTE_STATE  Set to "true" after Azure Storage backend exists and secrets above are set.
+# Repository variables:
+#   TERRAFORM_USE_REMOTE_STATE      Set to "true" after Azure Storage backend exists and secrets above are set.
+#   GITHUB_TERRAFORM_ENVIRONMENT    GitHub Actions Environment name for this workflow (default: Production).
+#                                   Create it under Settings > Environments for scoped secrets / approvals.
 
 name: Terraform (manual)
 
@@ -48,6 +50,8 @@ permissions:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ vars.GITHUB_TERRAFORM_ENVIRONMENT || 'Production' }}
     defaults:
       run:
         working-directory: devops/terraform
@@ -57,6 +61,18 @@ jobs:
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:
+      - name: Terraform workflow context
+        run: |
+          echo "github_actions_environment=${{ environment.name }}"
+          echo "terraform_action=${{ inputs.action }}"
+          echo "github_repository=${{ github.repository }}"
+          echo "github_ref=${{ github.ref }}"
+          echo "github_sha=${{ github.sha }}"
+          echo "github_event_name=${{ github.event_name }}"
+          echo "github_actor=${{ github.actor }}"
+          echo "github_run_id=${{ github.run_id }}"
+          echo "github_run_attempt=${{ github.run_attempt }}"
+
       - name: Checkout
         uses: actions/checkout@v4
 
