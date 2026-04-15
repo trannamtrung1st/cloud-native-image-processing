@@ -13,7 +13,7 @@ include:
 
 services:
   image-processing-worker:
-    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-worker:${CNIP_IMAGE_TAG:-1}
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cnip-worker:${CNIP_IMAGE_TAG:-1}
     platform: linux/amd64
     build:
       context: ./backend/src
@@ -41,7 +41,7 @@ services:
       - cnip-infra
 
   ai-generation-worker:
-    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-aiworker:${CNIP_IMAGE_TAG:-1}
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cnip-aiworker:${CNIP_IMAGE_TAG:-1}
     platform: linux/amd64
     build:
       context: ./backend/src
@@ -72,7 +72,7 @@ services:
       - cnip-infra
 
   api:
-    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-api:${CNIP_IMAGE_TAG:-1}
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cnip-api:${CNIP_IMAGE_TAG:-1}
     platform: linux/amd64
     build:
       context: ./backend/src

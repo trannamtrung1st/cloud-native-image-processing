@@ -15,7 +15,7 @@ include:
 
 services:
   frontend:
-    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cloud-native-image-processing-frontend:${CNIP_IMAGE_TAG:-1}
+    image: ${CNIP_ACR_LOGIN_SERVER:-cnip}/cnip-frontend:${CNIP_IMAGE_TAG:-1}
     platform: linux/amd64
     build:
       context: ./frontend
