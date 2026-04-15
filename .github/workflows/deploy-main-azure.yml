@@ -1,0 +1,135 @@
+# Deploy CNIP to Azure AKS from the devops README flow (build/push images + Helm upgrade).
+# Triggers on pushes to `main`. Configure repository secrets (and optional variables) below.
+# Infrastructure (Terraform): use the separate manual workflow `terraform-manual.yml` so state/backends stay explicit.
+#
+# Prerequisites (same outcomes as README §1 `terraform apply` + outputs):
+# - Azure AD app registration with federated credential for GitHub Actions (OIDC), granted:
+#   - AcrPush on the container registry
+#   - Azure Kubernetes Service Cluster User Role (or Contributor) on the AKS cluster resource
+# - Populate secrets from `terraform -chdir=devops/terraform output` after a successful apply.
+#
+# AKS / kubeconfig: GitHub does not store a kubeconfig secret for this flow. Helm needs a Kubernetes API client; after Azure login,
+# `az aks get-credentials` downloads short-lived cluster credentials into the runner's default kubeconfig for that job only.
+#
+# Required GitHub Actions secrets:
+#   AZURE_CLIENT_ID          App registration client ID used for OIDC login
+#   AZURE_TENANT_ID          Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID    Subscription containing RG/ACR/AKS
+#   ACR_NAME                   terraform output -raw acr_name
+#   CNIP_ACR_LOGIN_SERVER      terraform output -raw acr_login_server
+#   CNIP_PUBLIC_APP_URL      Same as README: ingress_test_http_url, cdn_frontdoor_endpoint_url (https), or your public origin for Vite
+#   AKS_RESOURCE_GROUP       terraform output -raw resource_group_name
+#   AKS_CLUSTER_NAME         terraform output -raw aks_name
+#   KEY_VAULT_NAME           terraform output -raw key_vault_name
+#   WORKLOAD_IDENTITY_CLIENT_ID  terraform output -raw workload_identity_client_id
+#
+# Optional repository variables:
+#   K8S_NAMESPACE                     Default: cnip (must match Terraform kubernetes_namespace)
+#   HELM_APPLICATION_INSIGHTS_ENABLED Set to "false" if Terraform has enable_application_insights = false
+#
+# Optional workflow_dispatch inputs let you override image tag or skip image build (Helm only).
+
+name: Deploy to Azure (main)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag for ACR (default = short SHA)"
+        required: false
+        type: string
+      skip_build:
+        description: "If true, only run Helm upgrade (images must already exist in ACR)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  HELM_RELEASE_NAME: cnip
+  HELM_CHART_PATH: ./devops/helm/cloud-native-image-processing
+  HELM_VALUES_FILE: ./devops/helm/cloud-native-image-processing/values.yaml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.image_tag }}" ]; then
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: ACR login
+        run: az acr login -n "${{ secrets.ACR_NAME }}"
+
+      - name: Build and push images
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_build == true) }}
+        env:
+          CNIP_ACR_LOGIN_SERVER: ${{ secrets.CNIP_ACR_LOGIN_SERVER }}
+          CNIP_PUBLIC_APP_URL: ${{ secrets.CNIP_PUBLIC_APP_URL }}
+          CNIP_IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker compose build api image-processing-worker ai-generation-worker frontend
+          docker compose push api image-processing-worker ai-generation-worker frontend
+
+      - name: Configure kubectl for AKS (Helm)
+        run: |
+          az aks get-credentials \
+            --resource-group "${{ secrets.AKS_RESOURCE_GROUP }}" \
+            --name "${{ secrets.AKS_CLUSTER_NAME }}" \
+            --overwrite-existing
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: Helm upgrade (Key Vault + ACR + workload identity)
+        env:
+          K8S_NAMESPACE: ${{ vars.K8S_NAMESPACE || 'cnip' }}
+          CNIP_IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          NS="${K8S_NAMESPACE:-cnip}"
+          if [ "${{ vars.HELM_APPLICATION_INSIGHTS_ENABLED }}" = "false" ]; then
+            AI_ENABLED=false
+          else
+            AI_ENABLED=true
+          fi
+          # Align chart image tags with what we just pushed
+          helm upgrade --install "${{ env.HELM_RELEASE_NAME }}" "${{ env.HELM_CHART_PATH }}" \
+            --namespace "$NS" \
+            --create-namespace \
+            -f "${{ env.HELM_VALUES_FILE }}" \
+            --wait --timeout 10m \
+            --set-string api.image.tag="${CNIP_IMAGE_TAG}" \
+            --set-string worker.image.tag="${CNIP_IMAGE_TAG}" \
+            --set-string aiWorker.image.tag="${CNIP_IMAGE_TAG}" \
+            --set-string frontend.image.tag="${CNIP_IMAGE_TAG}" \
+            --set keyVault.enabled=true \
+            --set applicationInsights.enabled="${AI_ENABLED}" \
+            --set-string acrLoginServer="${{ secrets.CNIP_ACR_LOGIN_SERVER }}" \
+            --set-string keyVault.tenantId="${{ secrets.AZURE_TENANT_ID }}" \
+            --set-string keyVault.vaultName="${{ secrets.KEY_VAULT_NAME }}" \
+            --set-string keyVault.workloadIdentityClientId="${{ secrets.WORKLOAD_IDENTITY_CLIENT_ID }}"

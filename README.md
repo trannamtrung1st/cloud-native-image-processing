@@ -20,16 +20,16 @@ Cloud-native image library: users sign in with **ASP.NET Core Identity**, upload
 
 | Area               | Choice                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| UI                 | React (Vite) SPA — [`frontend/README.md`](frontend/README.md)                                                                                    |
-| API & workers      | .NET 10, Clean Architecture — [`backend/src/README.md`](backend/src/README.md)                                                                   |
+| UI                 | React (Vite) SPA                                                                                                                                 |
+| API & workers      | .NET 10, Clean Architecture                                                                                                                      |
 | Containers         | Docker images for API, workers, and frontend (build/push details in [`devops/README.md`](devops/README.md))                                      |
 | Local stack        | **Docker Compose** — `docker-compose.yml`, `docker-compose.backend.yml`, `docker-compose-infra.yml` (see [`devops/README.md`](devops/README.md)) |
 | Production compute | **Azure Kubernetes Service (AKS)** — workloads deployed with **Helm** (`devops/helm/cloud-native-image-processing`)                              |
 | Data               | PostgreSQL (EF Core), **Azure Managed Redis**, Azure Blob Storage                                                                                |
 | Messaging          | Azure Event Hubs (`image-processing`, `ai-description`; local emulator in Compose)                                                               |
-| Production edge    | Azure Front Door, WAF/DDoS (typical reference design)                                                                                              |
+| Production edge    | Azure Front Door, WAF/DDoS (typical reference design)                                                                                            |
 | Notifications      | Azure Logic Apps (email after upload/processing)                                                                                                 |
-| Observability      | Azure Monitor (Log Analytics, AKS diagnostics + Container Insights, optional Application Insights for app telemetry)                               |
+| Observability      | Azure Monitor (Log Analytics, AKS diagnostics + Container Insights, optional Application Insights for app telemetry)                             |
 | AI                 | Azure Computer Vision (image description)                                                                                                        |
 
 ## Operations and deployment

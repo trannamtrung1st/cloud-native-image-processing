@@ -1,0 +1,149 @@
+# Manual Terraform plan/apply for devops/terraform (separate from image deploy on main).
+#
+# Why not merge into deploy-main-azure.yml?
+# - Infra changes are rarer and higher risk; manual dispatch + explicit confirmation is safer.
+# - Terraform needs the same Azure OIDC identity to have RBAC to create/update resources (often Owner/Contributor on the RG).
+#
+# Remote state (required for meaningful CI plan/apply):
+# - Local default in this repo is no remote backend (see devops/README.md). CI runners start with an empty disk, so apply without
+#   remote state would create parallel infrastructure. When repository variable TERRAFORM_USE_REMOTE_STATE is "true", this workflow
+#   writes a CI-only backend block and runs terraform init with an Azure Storage backend (OIDC).
+# - Create the storage account + container once, then set the secrets below.
+#
+# Required secrets (same app registration can be used as deploy workflow if it has both AKS/ACR and Terraform RBAC):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#   TERRAFORM_TFVARS   Multiline: full contents of terraform.tfvars (same as you would use locally after cp terraform.tfvars.example)
+#
+# When vars.TERRAFORM_USE_REMOTE_STATE == "true", also required:
+#   TF_STATE_RESOURCE_GROUP   Resource group containing the Terraform state storage account
+#   TF_STATE_STORAGE_ACCOUNT  Storage account name (for azurerm backend)
+#   TF_STATE_CONTAINER        Blob container name (e.g. tfstate)
+#   TF_STATE_KEY              State blob key (e.g. cnip.terraform.tfstate)
+#
+# Repository variable:
+#   TERRAFORM_USE_REMOTE_STATE  Set to "true" after Azure Storage backend exists and secrets above are set.
+
+name: Terraform (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Run terraform plan only, or plan+apply"
+        type: choice
+        options:
+          - plan
+          - apply
+        required: true
+      confirmation:
+        description: 'For apply: type exactly "apply" (safety check)'
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: devops/terraform
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Confirm apply
+        if: ${{ inputs.action == 'apply' && inputs.confirmation != 'apply' }}
+        run: |
+          echo "For action=apply, set the confirmation input to exactly: apply"
+          exit 1
+
+      - name: Require remote state for CI Terraform
+        if: ${{ vars.TERRAFORM_USE_REMOTE_STATE != 'true' }}
+        run: |
+          echo "Set repository variable TERRAFORM_USE_REMOTE_STATE to true after configuring an Azure Storage backend and TF_STATE_* secrets."
+          echo "Without remote state, CI would use an empty local state file and risk duplicating infrastructure."
+          exit 1
+
+      - name: Validate state backend secrets
+        env:
+          TF_STATE_RG: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
+          TF_STATE_SA: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
+          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
+          TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${TF_STATE_RG}" || (echo "Missing secret TF_STATE_RESOURCE_GROUP"; exit 1)
+          test -n "${TF_STATE_SA}" || (echo "Missing secret TF_STATE_STORAGE_ACCOUNT"; exit 1)
+          test -n "${TF_STATE_CONTAINER}" || (echo "Missing secret TF_STATE_CONTAINER"; exit 1)
+          test -n "${TF_STATE_KEY}" || (echo "Missing secret TF_STATE_KEY"; exit 1)
+
+      - name: Write terraform.tfvars from secret
+        env:
+          TERRAFORM_TFVARS: ${{ secrets.TERRAFORM_TFVARS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TERRAFORM_TFVARS}" ]; then
+            echo "Set repository secret TERRAFORM_TFVARS to the full contents of your terraform.tfvars file."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          with open("terraform.tfvars", "w", encoding="utf-8") as f:
+              f.write(os.environ["TERRAFORM_TFVARS"])
+          PY
+
+      - name: Write CI-only Azure backend block
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'terraform {' \
+            '  backend "azurerm" {' \
+            '  }' \
+            '}' > backend.ci.tf
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform init (Azure Storage backend, OIDC)
+        env:
+          TF_STATE_RG: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
+          TF_STATE_SA: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
+          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
+          TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
+        run: |
+          set -euo pipefail
+          terraform init -input=false -no-color \
+            -backend-config="resource_group_name=${TF_STATE_RG}" \
+            -backend-config="storage_account_name=${TF_STATE_SA}" \
+            -backend-config="container_name=${TF_STATE_CONTAINER}" \
+            -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
+            -backend-config="tenant_id=${ARM_TENANT_ID}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="client_id=${ARM_CLIENT_ID}"
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        if: ${{ inputs.action == 'plan' }}
+        run: terraform plan -input=false -no-color
+
+      - name: Terraform plan (apply)
+        if: ${{ inputs.action == 'apply' }}
+        run: terraform plan -input=false -no-color -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ inputs.action == 'apply' }}
+        run: terraform apply -input=false -auto-approve -no-color tfplan
