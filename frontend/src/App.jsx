@@ -39,6 +39,7 @@ function App() {
   const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const isRefreshingImagesRef = useRef(false);
 
   const authFetch = useAuthFetch(accessToken);
   const {
@@ -55,9 +56,21 @@ function App() {
   }, []);
 
   const loadImages = useCallback(
-    async (pageToLoad = currentPage, pageSizeToLoad = pageSize) => {
-      setIsLoadingImages(true);
-      setErrorMessage("");
+    async (
+      pageToLoad = currentPage,
+      pageSizeToLoad = pageSize,
+      options = {},
+    ) => {
+      const { silent = false } = options;
+      if (isRefreshingImagesRef.current) {
+        return;
+      }
+
+      isRefreshingImagesRef.current = true;
+      if (!silent) {
+        setIsLoadingImages(true);
+        setErrorMessage("");
+      }
       try {
         const query = new URLSearchParams({
           page: String(pageToLoad),
@@ -100,9 +113,14 @@ function App() {
           setCurrentPage(1);
         }
       } catch (error) {
-        setErrorMessage(error.message || "Unexpected error while loading images.");
+        if (!silent) {
+          setErrorMessage(error.message || "Unexpected error while loading images.");
+        }
       } finally {
-        setIsLoadingImages(false);
+        isRefreshingImagesRef.current = false;
+        if (!silent) {
+          setIsLoadingImages(false);
+        }
       }
     },
     [authFetch, currentPage, pageSize, handleLogout],
@@ -288,18 +306,17 @@ function App() {
     }
 
     const intervalId = setInterval(() => {
-      if (document.visibilityState !== "visible" || isLoadingImages) {
+      if (document.visibilityState !== "visible") {
         return;
       }
 
-      loadImages(currentPage, pageSize);
+      loadImages(currentPage, pageSize, { silent: true });
     }, IMAGES_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
   }, [
     isLoggedIn,
     accessToken,
-    isLoadingImages,
     currentPage,
     pageSize,
     loadImages,
