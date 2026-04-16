@@ -14,6 +14,8 @@
 # Required environment secrets (when that environment runs this workflow): AZURE_CLIENT_ID, AZURE_TENANT_ID,
 # AZURE_SUBSCRIPTION_ID, TERRAFORM_TFVARS. When TERRAFORM_USE_REMOTE_STATE is true: TF_STATE_RESOURCE_GROUP,
 # TF_STATE_STORAGE_ACCOUNT, TF_STATE_CONTAINER, TF_STATE_KEY.
+# Optional environment secret: KEYVAULT_ADMIN_PRINCIPAL_IDS (comma/newline-separated Azure AD object IDs
+# to also grant Key Vault Administrator role).
 # Required RBAC on the Terraform state storage account/container for the OIDC principal:
 # - Storage Blob Data Contributor (recommended, via use_azuread_auth=true in backend init below)
 #
@@ -43,11 +45,6 @@ on:
         type: boolean
         required: false
         default: false
-      keyvault_admin_principal_ids:
-        description: "Optional comma/newline-separated Azure AD object IDs to also grant Key Vault Administrator"
-        type: string
-        required: false
-        default: ""
 
 permissions:
   id-token: write
@@ -88,7 +85,7 @@ jobs:
           echo "github_ref_name=${{ github.ref_name }}"
           echo "terraform_action=${{ inputs.action }}"
           echo "bootstrap_state=${{ inputs.bootstrap_state }}"
-          echo "keyvault_admin_principal_ids_set=$([ -n "${{ inputs.keyvault_admin_principal_ids }}" ] && echo true || echo false)"
+          echo "keyvault_admin_principal_ids_secret_set=$([ -n "${{ secrets.KEYVAULT_ADMIN_PRINCIPAL_IDS }}" ] && echo true || echo false)"
           echo "github_repository=${{ github.repository }}"
           echo "github_ref=${{ github.ref }}"
           echo "github_sha=${{ github.sha }}"
@@ -188,9 +185,9 @@ jobs:
               f.write(os.environ["TERRAFORM_TFVARS"])
           PY
 
-      - name: Write CI override tfvars from workflow inputs
+      - name: Write CI override tfvars from environment secret
         env:
-          KEYVAULT_ADMIN_PRINCIPAL_IDS: ${{ inputs.keyvault_admin_principal_ids }}
+          KEYVAULT_ADMIN_PRINCIPAL_IDS: ${{ secrets.KEYVAULT_ADMIN_PRINCIPAL_IDS }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -200,7 +197,7 @@ jobs:
           import sys
 
           raw = os.environ.get("KEYVAULT_ADMIN_PRINCIPAL_IDS", "")
-          # Accept comma and/or newline separated values from workflow input.
+          # Accept comma and/or newline separated values from environment secret.
           values = [v.strip() for v in re.split(r"[\n,]", raw) if v.strip()]
           guid_pattern = re.compile(r"^[0-9a-fA-F-]{36}$")
           invalid = [v for v in values if not guid_pattern.match(v)]
