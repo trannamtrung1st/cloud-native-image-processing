@@ -43,6 +43,11 @@ on:
         type: boolean
         required: false
         default: false
+      keyvault_admin_principal_ids:
+        description: "Optional comma/newline-separated Azure AD object IDs to also grant Key Vault Administrator"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   id-token: write
@@ -83,6 +88,7 @@ jobs:
           echo "github_ref_name=${{ github.ref_name }}"
           echo "terraform_action=${{ inputs.action }}"
           echo "bootstrap_state=${{ inputs.bootstrap_state }}"
+          echo "keyvault_admin_principal_ids_set=$([ -n "${{ inputs.keyvault_admin_principal_ids }}" ] && echo true || echo false)"
           echo "github_repository=${{ github.repository }}"
           echo "github_ref=${{ github.ref }}"
           echo "github_sha=${{ github.sha }}"
@@ -180,6 +186,38 @@ jobs:
           import os
           with open("terraform.tfvars", "w", encoding="utf-8") as f:
               f.write(os.environ["TERRAFORM_TFVARS"])
+          PY
+
+      - name: Write CI override tfvars from workflow inputs
+        env:
+          KEYVAULT_ADMIN_PRINCIPAL_IDS: ${{ inputs.keyvault_admin_principal_ids }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          raw = os.environ.get("KEYVAULT_ADMIN_PRINCIPAL_IDS", "")
+          # Accept comma and/or newline separated values from workflow input.
+          values = [v.strip() for v in re.split(r"[\n,]", raw) if v.strip()]
+          guid_pattern = re.compile(r"^[0-9a-fA-F-]{36}$")
+          invalid = [v for v in values if not guid_pattern.match(v)]
+          if invalid:
+              print(
+                  "Invalid keyvault_admin_principal_ids values (must be Azure AD object ID GUIDs): "
+                  + ", ".join(invalid),
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          with open("ci_override.auto.tfvars", "w", encoding="utf-8") as f:
+              f.write(
+                  "key_vault_additional_admin_principal_ids = "
+                  + json.dumps(values)
+                  + "\n"
+              )
           PY
 
       - name: Write CI-only Azure backend block

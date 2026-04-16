@@ -13,6 +13,7 @@ import {
 } from "./lib/authSession.js";
 import { isProcessingImage, mapApiImage } from "./lib/images.js";
 import { parseProblemMessage, readResponseJson } from "./lib/http.js";
+import { IMAGES_REFRESH_INTERVAL_MS } from "./config/api.js";
 
 function App() {
   const [sessionReady, setSessionReady] = useState(false);
@@ -280,6 +281,30 @@ function App() {
       loadImages(currentPage, pageSize);
     }
   }, [isLoggedIn, accessToken, currentPage, pageSize, loadImages]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !accessToken) {
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      if (document.visibilityState !== "visible" || isLoadingImages) {
+        return;
+      }
+
+      loadImages(currentPage, pageSize);
+    }, IMAGES_REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [
+    isLoggedIn,
+    accessToken,
+    isLoadingImages,
+    currentPage,
+    pageSize,
+    loadImages,
+    IMAGES_REFRESH_INTERVAL_MS,
+  ]);
 
   if (!sessionReady) {
     return (

@@ -17,6 +17,8 @@ spec:
       labels:
         app.kubernetes.io/component: frontend
         app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        cnip/frontend-images-refresh-interval-seconds: {{ .Values.frontend.imagesRefreshIntervalSeconds | quote }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -26,6 +28,9 @@ spec:
         - name: frontend
           image: {{ include "cnip.frontendImage" . }}
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          env:
+            - name: VITE_IMAGES_REFRESH_INTERVAL_SECONDS
+              value: {{ .Values.frontend.imagesRefreshIntervalSeconds | quote }}
           ports:
             - name: http
               containerPort: 80

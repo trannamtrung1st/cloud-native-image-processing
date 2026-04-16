@@ -123,6 +123,12 @@ app.MapGet("/api/images", [Authorize] async (
         return Results.Unauthorized();
     }
 
+    var userEmail = principal.FindFirstValue(ClaimTypes.Email);
+    if (string.IsNullOrWhiteSpace(userEmail))
+    {
+        return Results.BadRequest(new { message = "User email claim is required to publish upload events." });
+    }
+
     // Explicit query parsing — minimal API binding for `page` / `pageSize` can fail to bind from the query string in some setups.
     static int ReadQueryInt(IQueryCollection query, string key, int fallback)
     {
@@ -200,6 +206,12 @@ app.MapPost("/api/images", [Authorize] async (
         return Results.Unauthorized();
     }
 
+    var userEmail = principal.FindFirstValue(ClaimTypes.Email);
+    if (string.IsNullOrWhiteSpace(userEmail))
+    {
+        return Results.BadRequest(new { message = "User email claim is required to publish upload events." });
+    }
+
     var useAi = string.Equals(useAiDescription, "true", StringComparison.OrdinalIgnoreCase)
         || string.Equals(useAiDescription, "on", StringComparison.OrdinalIgnoreCase);
     var op = string.IsNullOrWhiteSpace(operation) ? "none" : operation.Trim();
@@ -216,7 +228,7 @@ app.MapPost("/api/images", [Authorize] async (
             file.FileName,
             file.ContentType);
 
-        var created = await service.CreateAsync(command, userId, cancellationToken);
+        var created = await service.CreateAsync(command, userId, userEmail, cancellationToken);
         return Results.Created($"/api/images/{created.Id}", created);
     }
     catch (ArgumentException ex)

@@ -51,7 +51,10 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
         }
     }
 
-    public async Task PublishImageProcessingRequestedAsync(ImageRecord image, CancellationToken cancellationToken)
+    public async Task PublishImageProcessingRequestedAsync(
+        ImageRecord image,
+        string userEmail,
+        CancellationToken cancellationToken)
     {
         if (_processingClient is null)
         {
@@ -69,6 +72,7 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
         var payload = new ImageProcessingRequestedEvent(
             image.Id,
             image.UserId,
+            userEmail,
             image.BlobPath,
             image.Operation.ToString(),
             image.Name);
@@ -82,6 +86,7 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
 
     public async Task PublishAiDescriptionRequestedAsync(
         ImageRecord image,
+        string userEmail,
         string? manualDescriptionHint,
         CancellationToken cancellationToken)
     {
@@ -94,6 +99,7 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
         var payload = new AiDescriptionRequestedEvent(
             image.Id,
             image.UserId,
+            userEmail,
             image.BlobPath,
             image.Name,
             hasManual,

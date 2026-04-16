@@ -30,6 +30,17 @@ resource "azurerm_role_assignment" "terraform_kv_admin" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
+resource "azurerm_role_assignment" "additional_kv_admins" {
+  for_each = setsubtract(
+    toset(var.key_vault_additional_admin_principal_ids),
+    toset([data.azurerm_client_config.current.object_id])
+  )
+
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = each.value
+}
+
 resource "azurerm_user_assigned_identity" "workload" {
   name                = "${var.prefix}-kv-workload"
   resource_group_name = azurerm_resource_group.main.name

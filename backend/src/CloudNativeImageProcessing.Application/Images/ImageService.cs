@@ -83,8 +83,17 @@ public sealed class ImageService
 
     private static int ClampDemoDelayMs(int ms) => Math.Clamp(ms, 0, 60_000);
 
-    public async Task<ImageDto> CreateAsync(ImageUploadCommand command, string userId, CancellationToken cancellationToken)
+    public async Task<ImageDto> CreateAsync(
+        ImageUploadCommand command,
+        string userId,
+        string userEmail,
+        CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            throw new ArgumentException("User email is required.", nameof(userEmail));
+        }
+
         if (string.IsNullOrWhiteSpace(command.Name))
         {
             throw new ArgumentException("Name is required.", nameof(command));
@@ -121,12 +130,12 @@ public sealed class ImageService
 
         if (operation != ImageOperationType.None)
         {
-            await _eventPublisher.PublishImageProcessingRequestedAsync(image, cancellationToken);
+            await _eventPublisher.PublishImageProcessingRequestedAsync(image, userEmail, cancellationToken);
         }
 
         if (command.UseAiDescription)
         {
-            await _eventPublisher.PublishAiDescriptionRequestedAsync(image, manualDescription, cancellationToken);
+            await _eventPublisher.PublishAiDescriptionRequestedAsync(image, userEmail, manualDescription, cancellationToken);
         }
 
         _logger.LogInformation(

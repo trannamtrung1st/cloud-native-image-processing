@@ -124,6 +124,7 @@ aiWorker:
 frontend:
   enabled: true
   replicaCount: 1
+  imagesRefreshIntervalSeconds: "5"
   image:
     repository: cnip-frontend
     tag: "1.0.5-cnip"

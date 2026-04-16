@@ -23,6 +23,7 @@ services:
       <<: *build-linux-amd64
       args:
         VITE_API_BASE_URL: ${CNIP_PUBLIC_APP_URL:-http://localhost:8080}
+        VITE_IMAGES_REFRESH_INTERVAL_SECONDS: ${CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS:-5}
     container_name: cnip-frontend
     ports:
       - "5173:80"

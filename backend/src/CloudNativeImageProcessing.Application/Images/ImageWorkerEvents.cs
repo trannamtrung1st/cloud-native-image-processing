@@ -4,6 +4,7 @@ namespace CloudNativeImageProcessing.Application.Images;
 public sealed record ImageProcessingRequestedEvent(
     Guid ImageId,
     string UserId,
+    string UserEmail,
     string BlobPath,
     string Operation,
     string OriginalFileName);
@@ -12,6 +13,7 @@ public sealed record ImageProcessingRequestedEvent(
 public sealed record AiDescriptionRequestedEvent(
     Guid ImageId,
     string UserId,
+    string UserEmail,
     string BlobPath,
     string OriginalFileName,
     bool HasManualDescription,

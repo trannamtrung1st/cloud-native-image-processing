@@ -13,7 +13,8 @@
 #
 # Typical environment secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME, CNIP_ACR_LOGIN_SERVER,
 # CNIP_PUBLIC_APP_URL, AKS_RESOURCE_GROUP, AKS_CLUSTER_NAME, KEY_VAULT_NAME, WORKLOAD_IDENTITY_CLIENT_ID.
-# Typical environment variables: K8S_NAMESPACE (optional, default cnip), HELM_APPLICATION_INSIGHTS_ENABLED (optional).
+# Typical environment variables: K8S_NAMESPACE (optional, default cnip), HELM_APPLICATION_INSIGHTS_ENABLED (optional),
+# FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS (optional, default 5).
 # Optional mode: set environment variable USE_TERRAFORM_OUTPUTS=true to read deploy values from Terraform remote state outputs
 # (requires TF_STATE_* secrets and TERRAFORM_USE_REMOTE_STATE=true on that environment).
 #
@@ -162,6 +163,7 @@ jobs:
         env:
           CNIP_ACR_LOGIN_SERVER: ${{ env.CNIP_ACR_LOGIN_SERVER || secrets.CNIP_ACR_LOGIN_SERVER }}
           CNIP_PUBLIC_APP_URL: ${{ env.CNIP_PUBLIC_APP_URL || secrets.CNIP_PUBLIC_APP_URL }}
+          CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS: ${{ vars.FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS || '5' }}
           CNIP_IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
@@ -192,6 +194,7 @@ jobs:
           else
             AI_ENABLED=true
           fi
+          FRONTEND_REFRESH_INTERVAL="${{ vars.FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS || '5' }}"
           helm upgrade --install "${{ env.HELM_RELEASE_NAME }}" "${{ env.HELM_CHART_PATH }}" \
             --namespace "$NS" \
             --create-namespace \
@@ -203,6 +206,7 @@ jobs:
             --set-string frontend.image.tag="${CNIP_IMAGE_TAG}" \
             --set keyVault.enabled=true \
             --set applicationInsights.enabled="${AI_ENABLED}" \
+            --set-string frontend.imagesRefreshIntervalSeconds="${FRONTEND_REFRESH_INTERVAL}" \
             --set-string acrLoginServer="${CNIP_ACR_LOGIN_SERVER:-${{ secrets.CNIP_ACR_LOGIN_SERVER }}}" \
             --set-string keyVault.tenantId="${{ secrets.AZURE_TENANT_ID }}" \
             --set-string keyVault.vaultName="${KEY_VAULT_NAME:-${{ secrets.KEY_VAULT_NAME }}}" \

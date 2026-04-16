@@ -131,6 +131,20 @@ variable "computer_vision_api_key" {
   sensitive   = true
 }
 
+variable "key_vault_additional_admin_principal_ids" {
+  type        = list(string)
+  description = "Optional Azure AD object IDs to grant Key Vault Administrator on the project Key Vault (for example, specific user object IDs)."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for id in var.key_vault_additional_admin_principal_ids :
+      can(regex("^[0-9a-fA-F-]{36}$", trimspace(id)))
+    ])
+    error_message = "Each key_vault_additional_admin_principal_ids entry must be a valid Azure AD object ID (GUID)."
+  }
+}
+
 variable "enable_azure_front_door" {
   type        = bool
   description = "Deploy Azure Front Door (Premium) with WAF (managed Default Rule Set) in front of the ingress public hostname. Requires enable_public_nginx_ingress. Adds cost."

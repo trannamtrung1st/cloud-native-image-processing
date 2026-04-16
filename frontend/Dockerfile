@@ -8,6 +8,9 @@ COPY . .
 # Production behind ingress: leave VITE_API_BASE_URL empty so the SPA calls /api on the same origin.
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+# Image list auto-refresh interval for frontend polling.
+ARG VITE_IMAGES_REFRESH_INTERVAL_SECONDS=5
+ENV VITE_IMAGES_REFRESH_INTERVAL_SECONDS=${VITE_IMAGES_REFRESH_INTERVAL_SECONDS}
 # Set to public origin with trailing slash when serving from a known URL (e.g. http://1.2.2.2/); default / for relative assets.
 ARG VITE_BASE_URL=/
 ENV VITE_BASE_URL=${VITE_BASE_URL}
