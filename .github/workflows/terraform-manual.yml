@@ -79,6 +79,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Pin Azure CLI subscription context
+        if: ${{ vars.TERRAFORM_USE_REMOTE_STATE == 'true' }}
+        run: |
+          set -euo pipefail
+          az account set --subscription "${ARM_SUBSCRIPTION_ID}"
+          test "$(az account show --query id -o tsv)" = "${ARM_SUBSCRIPTION_ID}"
+
       - name: Terraform workflow context
         run: |
           echo "target_github_environment=${TARGET_GITHUB_ENVIRONMENT}"
@@ -130,6 +137,7 @@ jobs:
           az group create \
             --name "${TF_STATE_RG}" \
             --location "${TF_STATE_LOCATION}" \
+            --subscription "${ARM_SUBSCRIPTION_ID}" \
             --output none
 
       - name: Ensure Terraform state storage account exists (LRS minimal)
@@ -144,6 +152,7 @@ jobs:
             --name "${TF_STATE_SA}" \
             --resource-group "${TF_STATE_RG}" \
             --location "${TF_STATE_LOCATION}" \
+            --subscription "${ARM_SUBSCRIPTION_ID}" \
             --sku Standard_LRS \
             --kind StorageV2 \
             --min-tls-version TLS1_2 \
