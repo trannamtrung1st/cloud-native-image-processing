@@ -3,7 +3,7 @@
 
 locals {
   monitor_enabled  = var.enable_azure_monitor
-  appinsights_name = var.application_insights_name != "" ? var.application_insights_name : "${var.prefix}-appinsights"
+  appinsights_name = var.application_insights_name != "" ? var.application_insights_name : "${var.prefix}-appinsights-${random_string.global_suffix.result}"
 }
 
 resource "random_string" "law_suffix" {

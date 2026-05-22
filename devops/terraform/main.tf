@@ -4,6 +4,15 @@ resource "azurerm_resource_group" "main" {
   tags     = var.tags
 }
 
+# Suffix for Azure names that must be globally unique within a subscription/region (or worldwide for ACR, App Configuration).
+resource "random_string" "global_suffix" {
+  length  = 6
+  lower   = true
+  upper   = false
+  numeric = true
+  special = false
+}
+
 resource "random_string" "storage_suffix" {
   length  = 6
   lower   = true
@@ -26,14 +35,15 @@ resource "random_password" "postgres" {
 }
 
 locals {
+  name_slug = replace(lower(var.prefix), "-", "")
   # Storage account: 3–24 chars, lowercase letters and numbers only
-  sa_prefix            = substr(replace(lower(var.prefix), "-", ""), 0, 10)
+  sa_prefix            = substr(local.name_slug, 0, 10)
   storage_account_name = local.sa_prefix == "" ? "stg${random_string.storage_suffix.result}" : "${local.sa_prefix}${random_string.storage_suffix.result}"
-  acr_name             = substr(replace("${lower(var.prefix)}acr", "-", ""), 0, 50)
+  acr_name             = substr("${local.name_slug}acr${random_string.global_suffix.result}", 0, 50)
   aks_name             = "${var.prefix}-aks"
-  pg_name              = "${var.prefix}-pg"
-  redis_name           = substr("${replace(lower(var.prefix), "-", "")}r${random_string.redis_suffix.result}", 0, 63)
-  eh_namespace         = "${var.prefix}-eh"
+  pg_name              = substr("${var.prefix}-pg-${random_string.global_suffix.result}", 0, 63)
+  redis_name           = substr("${local.name_slug}r${random_string.redis_suffix.result}", 0, 63)
+  eh_namespace         = substr("${var.prefix}-eh-${random_string.global_suffix.result}", 0, 50)
 }
 
 resource "azurerm_container_registry" "main" {

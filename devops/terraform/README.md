@@ -26,6 +26,8 @@ terraform apply -parallelism=10
 
 CI uses `-parallelism=10` on plan/apply (10 concurrent resource operations).
 
+**Globally unique names:** `random_string.global_suffix` (6 chars) is appended to ACR, App Configuration, PostgreSQL Flexible Server, and Event Hubs namespace (same pattern as storage account, Key Vault, and Redis). Example with `prefix = "cnip"`: `cnipacr1a2b3c`, `cnipappcfg1a2b3c`, `cnip-pg-1a2b3c`, `cnip-eh-1a2b3c`. Outputs (`acr_name`, `app_configuration_name`, etc.) reflect the actual names for deploy.
+
 After the first apply, change app settings and secret **values** in Azure Portal. Terraform uses `lifecycle { ignore_changes = [value] }` on App Configuration keys and Key Vault secrets so later applies do not overwrite portal edits.
 
 ## What Terraform still owns vs portal

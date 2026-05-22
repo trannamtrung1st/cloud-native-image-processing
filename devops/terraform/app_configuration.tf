@@ -1,5 +1,5 @@
 locals {
-  app_configuration_name = substr("${replace(lower(var.prefix), "-", "")}appcfg", 0, 50)
+  app_configuration_name = substr("${replace(lower(var.prefix), "-", "")}appcfg${random_string.global_suffix.result}", 0, 50)
 
   app_configuration_keys = {
     "cnip/app/aspnetcore_environment"                    = var.cnip_app_settings.app.aspnetcore_environment

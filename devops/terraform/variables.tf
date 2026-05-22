@@ -11,7 +11,7 @@ variable "resource_group_name" {
 
 variable "prefix" {
   type        = string
-  description = "Short name prefix for Azure resources (letters/digits; used inside globally-unique names). Use at least 3 alphanumeric characters (e.g. cnip)."
+  description = "Short name prefix for Azure resources (letters/digits). A random suffix is appended for globally unique names (ACR, App Configuration, PostgreSQL, Event Hubs, etc.). Use at least 3 alphanumeric characters (e.g. cnip)."
   default     = "cnip"
 
   validation {
