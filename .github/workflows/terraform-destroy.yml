@@ -1,60 +1,41 @@
-# Manual Terraform plan/apply for devops/terraform.
+# Manual Terraform destroy for devops/terraform (tear down CNIP Azure resources in remote state).
 #
-# GitHub Environments — branch picks the environment name (no repository variable for routing):
-#   main    → Production
-#   develop → Staging
-#   other   → Development
-# Configure **environment secrets** and **environment variables** on each (Settings → Environments → <name>).
+# Same branch → GitHub Environment mapping as terraform-manual.yml:
+#   main → Production, develop → Staging, other → Development
 #
-# Remote state: set environment variable TERRAFORM_USE_REMOTE_STATE=true on each environment that runs CI apply, after
-# configuring the Azure Storage backend; set TF_STATE_* environment secrets there too.
-# Optional environment variable for bootstrap creation:
-# - TF_STATE_LOCATION (default: southeastasia) used only when creating the state storage account if missing.
+# Does NOT delete the Terraform state storage account/container (TF_STATE_*). State file remains for audit/re-apply.
+# Recommended: scale down or uninstall Helm release first; destroy removes AKS and data plane resources in state.
 #
-# Required environment secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
-#   TERRAFORM_VAULT_SECRETS_TFVARS (vault-secrets.auto.tfvars). When TERRAFORM_USE_REMOTE_STATE is true: TF_STATE_*.
-# Required environment variables: TERRAFORM_CONFIG_TFVARS (infra), TERRAFORM_APP_TFVARS (app settings seed).
-# Required RBAC on the Terraform state storage account/container for the OIDC principal:
-# - Storage Blob Data Contributor (recommended, via use_azuread_auth=true in backend init below)
-#
-# Authentication: ARM_USE_OIDC (same pattern as deploy).
-# Teardown: terraform-destroy.yml (plan-destroy / destroy; confirmation "destroy").
+# Required on the target environment: same secrets/variables as Terraform (manual) — TERRAFORM_USE_REMOTE_STATE=true,
+# TF_STATE_*, AZURE_*, TERRAFORM_CONFIG_TFVARS, TERRAFORM_APP_TFVARS, TERRAFORM_VAULT_SECRETS_TFVARS.
 
-# Reference: https://learn.microsoft.com/en-us/devops/deliver/iac-github-actions
-
-name: Terraform (manual)
+name: Terraform (destroy)
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Run terraform plan only, or plan+apply"
+        description: "Run terraform plan -destroy only, or plan -destroy + destroy"
         type: choice
         options:
-          - plan
-          - apply
+          - plan-destroy
+          - destroy
         required: true
       confirmation:
-        description: 'For apply: type exactly "apply" (safety check)'
+        description: 'For destroy: type exactly "destroy" (safety check)'
         type: string
         required: false
         default: ""
-      bootstrap_state:
-        description: "Bootstrap tfstate backend (resource group/storage account/container) before init"
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   id-token: write
   contents: read
 
 env:
-  # Must match environment.name below — GitHub does not allow env.* in jobs.*.environment.name.
   TARGET_GITHUB_ENVIRONMENT: ${{ github.ref_name == 'main' && 'Production' || (github.ref_name == 'develop' && 'Staging' || 'Development') }}
 
 jobs:
-  terraform:
+  terraform-destroy:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.ref_name == 'main' && 'Production' || (github.ref_name == 'develop' && 'Staging' || 'Development') }}
@@ -67,7 +48,7 @@ jobs:
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_CLI_ARGS_plan: "-parallelism=10"
-      TF_CLI_ARGS_apply: "-parallelism=10"
+      TF_CLI_ARGS_destroy: "-parallelism=10"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,34 +61,31 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Terraform workflow context
+      - name: Terraform destroy workflow context
         run: |
           echo "target_github_environment=${TARGET_GITHUB_ENVIRONMENT}"
           echo "github_ref_name=${{ github.ref_name }}"
           echo "terraform_action=${{ inputs.action }}"
-          echo "bootstrap_state=${{ inputs.bootstrap_state }}"
           echo "terraform_config_tfvars_set=$([ -n "${{ vars.TERRAFORM_CONFIG_TFVARS }}" ] && echo true || echo false)"
           echo "terraform_app_tfvars_set=$([ -n "${{ vars.TERRAFORM_APP_TFVARS }}" ] && echo true || echo false)"
           echo "terraform_vault_secrets_tfvars_set=$([ -n "${{ secrets.TERRAFORM_VAULT_SECRETS_TFVARS }}" ] && echo true || echo false)"
           echo "github_repository=${{ github.repository }}"
           echo "github_ref=${{ github.ref }}"
           echo "github_sha=${{ github.sha }}"
-          echo "github_event_name=${{ github.event_name }}"
           echo "github_actor=${{ github.actor }}"
           echo "github_run_id=${{ github.run_id }}"
           echo "github_run_attempt=${{ github.run_attempt }}"
 
-      - name: Confirm apply
-        if: ${{ inputs.action == 'apply' && inputs.confirmation != 'apply' }}
+      - name: Confirm destroy
+        if: ${{ inputs.action == 'destroy' && inputs.confirmation != 'destroy' }}
         run: |
-          echo "For action=apply, set the confirmation input to exactly: apply"
+          echo "For action=destroy, set the confirmation input to exactly: destroy"
           exit 1
 
       - name: Require remote state for CI Terraform
         if: ${{ vars.TERRAFORM_USE_REMOTE_STATE != 'true' }}
         run: |
-          echo "On GitHub Environment \"${TARGET_GITHUB_ENVIRONMENT}\", set variable TERRAFORM_USE_REMOTE_STATE=true (Environment variables) after configuring Azure Storage and TF_STATE_* secrets."
-          echo "Without remote state, CI would use an empty local state file and risk duplicating infrastructure."
+          echo "On GitHub Environment \"${TARGET_GITHUB_ENVIRONMENT}\", set variable TERRAFORM_USE_REMOTE_STATE=true before running destroy."
           exit 1
 
       - name: Validate state backend secrets
@@ -123,63 +101,13 @@ jobs:
           test -n "${TF_STATE_CONTAINER}" || (echo "Missing environment secret TF_STATE_CONTAINER"; exit 1)
           test -n "${TF_STATE_KEY}" || (echo "Missing environment secret TF_STATE_KEY"; exit 1)
 
-      - name: Ensure Terraform state resource group exists
-        if: ${{ vars.TERRAFORM_USE_REMOTE_STATE == 'true' && inputs.bootstrap_state }}
-        env:
-          TF_STATE_RG: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
-          TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION || 'southeastasia' }}
-        run: |
-          set -euo pipefail
-          az group create \
-            --name "${TF_STATE_RG}" \
-            --location "${TF_STATE_LOCATION}" \
-            --output none
-
-      - name: Ensure Terraform state storage account exists (LRS minimal)
-        if: ${{ vars.TERRAFORM_USE_REMOTE_STATE == 'true' && inputs.bootstrap_state }}
-        env:
-          TF_STATE_RG: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
-          TF_STATE_SA: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
-          TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION || 'southeastasia' }}
-        run: |
-          set -euo pipefail
-          az storage account create \
-            --name "${TF_STATE_SA}" \
-            --resource-group "${TF_STATE_RG}" \
-            --location "${TF_STATE_LOCATION}" \
-            --sku Standard_LRS \
-            --kind StorageV2 \
-            --min-tls-version TLS1_2 \
-            --https-only true \
-            --allow-blob-public-access false \
-            --output none
-
-      - name: Ensure Terraform state blob container exists
-        if: ${{ vars.TERRAFORM_USE_REMOTE_STATE == 'true' && inputs.bootstrap_state }}
-        env:
-          TF_STATE_SA: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
-          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
-        run: |
-          set -euo pipefail
-          if [ "$(az storage container exists \
-            --name "${TF_STATE_CONTAINER}" \
-            --account-name "${TF_STATE_SA}" \
-            --auth-mode login \
-            --query exists -o tsv)" != "true" ]; then
-            az storage container create \
-              --name "${TF_STATE_CONTAINER}" \
-              --account-name "${TF_STATE_SA}" \
-              --auth-mode login \
-              --output none
-          fi
-
       - name: Write config.auto.tfvars from environment variable
         env:
           TERRAFORM_CONFIG_TFVARS: ${{ vars.TERRAFORM_CONFIG_TFVARS }}
         run: |
           set -euo pipefail
           if [ -z "${TERRAFORM_CONFIG_TFVARS}" ]; then
-            echo "Set environment variable TERRAFORM_CONFIG_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\" (copy from config.auto.tfvars.example)."
+            echo "Set environment variable TERRAFORM_CONFIG_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\"."
             exit 1
           fi
           python3 - <<'PY'
@@ -194,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TERRAFORM_APP_TFVARS}" ]; then
-            echo "Set environment variable TERRAFORM_APP_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\" (copy from app.auto.tfvars.example)."
+            echo "Set environment variable TERRAFORM_APP_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\"."
             exit 1
           fi
           python3 - <<'PY'
@@ -209,7 +137,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TERRAFORM_VAULT_SECRETS_TFVARS}" ]; then
-            echo "Set environment secret TERRAFORM_VAULT_SECRETS_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\" (copy from vault-secrets.auto.tfvars.example)."
+            echo "Set environment secret TERRAFORM_VAULT_SECRETS_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\"."
             exit 1
           fi
           python3 - <<'PY'
@@ -254,14 +182,20 @@ jobs:
       - name: Terraform validate
         run: terraform validate -no-color
 
-      - name: Terraform plan
-        if: ${{ inputs.action == 'plan' }}
-        run: terraform plan -input=false -no-color -parallelism=10
+      - name: Terraform plan (destroy)
+        if: ${{ inputs.action == 'plan-destroy' }}
+        run: terraform plan -destroy -input=false -no-color -parallelism=10
 
-      - name: Terraform plan (apply)
-        if: ${{ inputs.action == 'apply' }}
-        run: terraform plan -input=false -no-color -parallelism=10 -out=tfplan
+      - name: Terraform plan (destroy, apply)
+        if: ${{ inputs.action == 'destroy' }}
+        run: terraform plan -destroy -input=false -no-color -parallelism=10 -out=tfplan-destroy
 
-      - name: Terraform apply
-        if: ${{ inputs.action == 'apply' }}
-        run: terraform apply -input=false -auto-approve -no-color -parallelism=10 tfplan
+      - name: Terraform destroy
+        if: ${{ inputs.action == 'destroy' }}
+        run: terraform apply -input=false -auto-approve -no-color -parallelism=10 tfplan-destroy
+
+      - name: Destroy complete (state backend retained)
+        if: ${{ inputs.action == 'destroy' && success() }}
+        run: |
+          echo "Terraform destroy finished. Remote state blob is unchanged (TF_STATE_* storage is not deleted)."
+          echo "To reprovision: run Terraform (manual) apply on this environment."

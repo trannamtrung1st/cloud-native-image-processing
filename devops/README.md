@@ -22,7 +22,7 @@ Terraform does **not** overwrite App Configuration or Key Vault **values** after
 
 **Local:** copy all three examples in [`terraform/`](terraform/) (see [`terraform/README.md`](terraform/README.md)).
 
-**GitHub Actions:** `TERRAFORM_CONFIG_TFVARS`, `TERRAFORM_APP_TFVARS`, `TERRAFORM_VAULT_SECRETS_TFVARS` — [`.github/workflows/terraform-manual.yml`](../.github/workflows/terraform-manual.yml).
+**GitHub Actions:** `TERRAFORM_CONFIG_TFVARS`, `TERRAFORM_APP_TFVARS`, `TERRAFORM_VAULT_SECRETS_TFVARS` — [`.github/workflows/terraform-manual.yml`](../.github/workflows/terraform-manual.yml) (plan/apply), [`.github/workflows/terraform-destroy.yml`](../.github/workflows/terraform-destroy.yml) (plan-destroy/destroy).
 
 **Migrating:** split old `TERRAFORM_TFVARS` / `TERRAFORM_SECRETS_TFVARS` into infra (`config`), `cnip_app_settings` (`app`), and `cnip_vault_secrets_init` (`vault-secrets`). Move `key_vault_additional_admin_principal_ids` to **config** only.
 
@@ -45,6 +45,8 @@ Branch → environment: `main` → **Production**, `develop` → **Staging**, ot
 | `APP_CONFIGURATION_NAME` | Secret (optional) | Deploy only if `USE_TERRAFORM_OUTPUTS` is not `true` |
 
 Deploy [`.github/workflows/deploy-main-azure.yml`](../.github/workflows/deploy-main-azure.yml): **App Configuration** → `appconfig.overrides.yaml` → Helm; **Key Vault** → CSI at pod start (not tfvars).
+
+**Teardown:** [`.github/workflows/terraform-destroy.yml`](../.github/workflows/terraform-destroy.yml) — `plan-destroy` to preview, `destroy` with confirmation `destroy`. Uses the same environment secrets/variables as Terraform (manual). Does not delete the `TF_STATE_*` storage account. Optionally uninstall the Helm release first (`helm uninstall cnip -n cnip`).
 
 ---
 
