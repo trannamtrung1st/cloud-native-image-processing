@@ -3,7 +3,7 @@
 # Same branch → GitHub Environment mapping as terraform-manual.yml:
 #   main → Production, develop → Staging, other → Development
 #
-# Does NOT delete the storage account in TERRAFORM_STATE. State blob remains for audit/re-apply.
+# After terraform destroy: deletes TERRAFORM_STATE resource_group_name (state storage account + blob) unless skipped below.
 # Backend JSON parsed via .github/actions/load-terraform-backend (same as Terraform manual).
 #
 # Required: same environment variables/secrets as Terraform (manual).
@@ -25,6 +25,11 @@ on:
         type: string
         required: false
         default: ""
+      delete_state_resource_group:
+        description: "After destroy, delete TERRAFORM_STATE resource_group_name (state RG + storage account + tfstate blob)"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   id-token: write
@@ -65,6 +70,7 @@ jobs:
           echo "target_github_environment=${TARGET_GITHUB_ENVIRONMENT}"
           echo "github_ref_name=${{ github.ref_name }}"
           echo "terraform_action=${{ inputs.action }}"
+          echo "delete_state_resource_group=${{ inputs.delete_state_resource_group }}"
           echo "terraform_config_tfvars_set=$([ -n "${{ vars.TERRAFORM_CONFIG_TFVARS }}" ] && echo true || echo false)"
           echo "terraform_app_tfvars_set=$([ -n "${{ vars.TERRAFORM_APP_TFVARS }}" ] && echo true || echo false)"
           echo "terraform_vault_secrets_tfvars_set=$([ -n "${{ secrets.TERRAFORM_VAULT_SECRETS_TFVARS }}" ] && echo true || echo false)"
@@ -180,8 +186,25 @@ jobs:
         if: ${{ inputs.action == 'destroy' }}
         run: terraform apply -input=false -auto-approve -no-color -parallelism=10 tfplan-destroy
 
-      - name: Destroy complete (state backend retained)
+      - name: Delete Terraform state resource group
+        if: ${{ inputs.action == 'destroy' && inputs.delete_state_resource_group && success() }}
+        run: |
+          set -euo pipefail
+          echo "Deleting state backend resource group: ${TF_STATE_RG} (storage account: ${TF_STATE_SA})"
+          if az group show --name "${TF_STATE_RG}" --output none 2>/dev/null; then
+            az group delete --name "${TF_STATE_RG}" --yes --no-wait
+            echo "Delete initiated for ${TF_STATE_RG}. State container ${TF_STATE_CONTAINER} and key ${TF_STATE_KEY} are removed with the group."
+          else
+            echo "Resource group ${TF_STATE_RG} not found (already deleted or never created)."
+          fi
+
+      - name: Destroy complete
         if: ${{ inputs.action == 'destroy' && success() }}
         run: |
-          echo "Terraform destroy finished. Remote state blob is unchanged (TERRAFORM_STATE storage is not deleted)."
-          echo "To reprovision: run Terraform (manual) apply on this environment."
+          if [ "${{ inputs.delete_state_resource_group }}" = "true" ]; then
+            echo "Terraform destroy finished. State backend RG ${TF_STATE_RG} delete was requested (see previous step)."
+            echo "To reprovision: bootstrap state (Terraform manual, bootstrap_state) and apply again."
+          else
+            echo "Terraform destroy finished. State backend retained (delete_state_resource_group=false)."
+            echo "To reprovision: run Terraform (manual) apply on this environment."
+          fi

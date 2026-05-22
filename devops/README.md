@@ -49,7 +49,7 @@ Branch → environment: `main` → **Production**, `develop` → **Staging**, ot
 
 Deploy [`.github/workflows/deploy-main-azure.yml`](../.github/workflows/deploy-main-azure.yml): **App Configuration** → `appconfig.overrides.yaml` → Helm; **Key Vault** → CSI at pod start (not tfvars).
 
-**Teardown:** [`.github/workflows/terraform-destroy.yml`](../.github/workflows/terraform-destroy.yml) — `plan-destroy` / `destroy` (confirmation `destroy`). Does not delete the storage account in `TERRAFORM_STATE`.
+**Teardown:** [`.github/workflows/terraform-destroy.yml`](../.github/workflows/terraform-destroy.yml) — `plan-destroy` / `destroy` (confirmation `destroy`). By default also deletes the `TERRAFORM_STATE` resource group (state storage + tfstate blob). Uncheck **delete_state_resource_group** to keep state for re-apply.
 
 ---
 
@@ -199,7 +199,7 @@ kubectl get pods,svc,ingress -n "$K8S_NAMESPACE"
 | Ingress without Terraform | Set `enable_public_nginx_ingress = false` and install [ingress-nginx](https://kubernetes.github.io/ingress-nginx/deploy/) manually (see optional step in §1).                                    |
 | Terraform outputs         | `terraform -chdir=devops/terraform output` — connection strings, Key Vault name, ingress URL, ACR.                                                                                               |
 | Remote state              | Local: default backend. CI: `TERRAFORM_USE_REMOTE_STATE` + `TERRAFORM_STATE` JSON (see [GitHub Actions](#github-actions-ci)).                                                                    |
-| Destroy                   | `cd devops/terraform && terraform destroy`                                                                                                                                                       |
+| Destroy                   | CI: **Terraform (destroy)** workflow. Local: `terraform destroy`, then `az group delete -n <TERRAFORM_STATE.resource_group_name> -y` to remove state storage.                                                                 |
 | Front Door / WAF          | `enable_azure_front_door` in `config.auto.tfvars`; align Helm ingress/CORS with `terraform output -raw cdn_frontdoor_endpoint_url`.                                                              |
 | App / Helm config         | `app.auto.tfvars` seeds App Config; edit in Portal; deploy reads into `appconfig.overrides.yaml`.                                                                                                |
 | Vault secrets             | `vault-secrets.auto.tfvars` seeds optional secrets; platform strings seeded once; edit in Portal.                                                                                                |

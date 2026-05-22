@@ -185,6 +185,6 @@ This creates Azure infrastructure and **seeds** App Configuration keys and Key V
 2. **Secrets** (e.g. Computer Vision): Azure Portal → Key Vault → Secrets → edit → restart CNIP pods or redeploy
 3. **Infrastructure** (AKS size, Front Door): edit `config.auto.tfvars` / `TERRAFORM_CONFIG_TFVARS` → run **Terraform (manual)** apply
 
-**Teardown:** Actions → **Terraform (destroy)** → `plan-destroy` first, then `destroy` with confirmation `destroy` (same GitHub Environment as apply). See [`devops/README.md`](devops/README.md#github-actions-ci).
+**Teardown:** Actions → **Terraform (destroy)** → `plan-destroy` first, then `destroy` with confirmation `destroy`. By default removes the `TERRAFORM_STATE` resource group (remote state storage) after CNIP infra is destroyed. See [`devops/README.md`](devops/README.md#github-actions-ci).
 
 Details: [`devops/README.md`](devops/README.md#managing-configuration-in-azure-portal).

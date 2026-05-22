@@ -55,7 +55,7 @@ Optional secrets only (Computer Vision). Platform secrets (`postgres-connection-
 
 [`terraform-manual.yml`](../../.github/workflows/terraform-manual.yml): `TERRAFORM_USE_REMOTE_STATE=true`, `TERRAFORM_STATE` (JSON → [load-terraform-backend](../../.github/actions/load-terraform-backend)), `AZURE_*` variables, tfvars + secret `TERRAFORM_VAULT_SECRETS_TFVARS`. Example: [`terraform-state.github.json.example`](terraform-state.github.json.example).
 
-[`terraform-destroy.yml`](../../.github/workflows/terraform-destroy.yml): same backend and tfvars; `plan-destroy` or `destroy` (confirmation `destroy`). State blob and storage account are retained.
+[`terraform-destroy.yml`](../../.github/workflows/terraform-destroy.yml): same backend and tfvars; `plan-destroy` or `destroy` (confirmation `destroy`). Default: after destroy, deletes `TERRAFORM_STATE` `resource_group_name` via `az group delete`.
 
 ## Outputs
 
