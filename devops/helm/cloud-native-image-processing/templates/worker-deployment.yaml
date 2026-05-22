@@ -14,6 +14,8 @@ spec:
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
+      annotations:
+        {{- include "cnip.checksumAnnotations" . | nindent 8 }}
       labels:
         app.kubernetes.io/component: worker
         app.kubernetes.io/instance: {{ .Release.Name }}

@@ -7,7 +7,7 @@
         "Entities": [
           {
             "Name": "image-processing",
-            "PartitionCount": 2,
+            "PartitionCount": 10,
             "ConsumerGroups": [
               {
                 "Name": "cg1"
@@ -16,7 +16,7 @@
           },
           {
             "Name": "ai-description",
-            "PartitionCount": 2,
+            "PartitionCount": 10,
             "ConsumerGroups": [
               {
                 "Name": "cg1"

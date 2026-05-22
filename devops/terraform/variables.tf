@@ -105,6 +105,12 @@ variable "eventhub_capacity" {
   default     = 1
 }
 
+variable "eventhub_partition_count" {
+  type        = number
+  description = "Partition count per Event Hub. With one worker replica, EventProcessorClient runs up to one concurrent handler per owned partition (max equals this value)."
+  default     = 10
+}
+
 variable "kubernetes_namespace" {
   type        = string
   description = "Namespace where Helm will install the app (used for workload identity federated credential subject)."
@@ -117,23 +123,91 @@ variable "workload_service_account_name" {
   default     = "cnip-workload"
 }
 
-variable "computer_vision_endpoint" {
-  type        = string
-  description = "Optional Computer Vision endpoint stored in Key Vault (can be empty)."
-  default     = ""
-  sensitive   = false
+variable "cnip_app_settings" {
+  description = "Initial CNIP app + Helm settings seeded into Azure App Configuration. After apply, manage in Azure Portal; Terraform ignores value changes."
+  type = object({
+    app = object({
+      aspnetcore_environment           = string
+      dotnet_environment               = string
+      blob_container_name              = string
+      eventhub_image_processing_hub    = string
+      eventhub_image_processing_cg     = string
+      eventhub_ai_description_hub      = string
+      eventhub_ai_description_cg       = string
+      eventhub_checkpoint_container    = string
+      demo_get_by_id_delay_ms          = string
+      demo_grayscale_delay_ms          = string
+      demo_ai_description_delay_ms     = string
+      upload_max_request_body_bytes    = string
+      identity_bearer_token_hours      = string
+      redis_details_expiration_minutes = string
+      cors_allowed_origins             = list(string)
+    })
+    helm = object({
+      api_replica_count                        = number
+      worker_replica_count                     = number
+      ai_worker_replica_count                  = number
+      frontend_replica_count                   = number
+      application_insights_enabled             = bool
+      frontend_images_refresh_interval_seconds = string
+    })
+  })
+  default = {
+    app = {
+      aspnetcore_environment           = "Production"
+      dotnet_environment               = "Production"
+      blob_container_name              = "images"
+      eventhub_image_processing_hub    = "image-processing"
+      eventhub_image_processing_cg     = "cg1"
+      eventhub_ai_description_hub      = "ai-description"
+      eventhub_ai_description_cg       = "cg1"
+      eventhub_checkpoint_container    = "eh-checkpoints"
+      demo_get_by_id_delay_ms          = "0"
+      demo_grayscale_delay_ms          = "0"
+      demo_ai_description_delay_ms     = "0"
+      upload_max_request_body_bytes    = "10485760"
+      identity_bearer_token_hours      = "8"
+      redis_details_expiration_minutes = "5"
+      cors_allowed_origins             = ["http://cnip.demo.local"]
+    }
+    helm = {
+      api_replica_count                        = 1
+      worker_replica_count                     = 1
+      ai_worker_replica_count                  = 1
+      frontend_replica_count                   = 1
+      application_insights_enabled             = true
+      frontend_images_refresh_interval_seconds = "5"
+    }
+  }
 }
 
-variable "computer_vision_api_key" {
+variable "app_configuration_sku" {
   type        = string
-  description = "Optional Computer Vision API key stored in Key Vault (can be empty)."
-  default     = ""
-  sensitive   = true
+  description = "Azure App Configuration SKU: developer, free, standard, or premium."
+  default     = "developer"
+
+  validation {
+    condition     = contains(["developer", "free", "standard", "premium"], var.app_configuration_sku)
+    error_message = "app_configuration_sku must be developer, free, standard, or premium."
+  }
+}
+
+variable "cnip_vault_secrets_init" {
+  description = "Initial optional Key Vault secret values (e.g. Computer Vision). After apply, manage in Azure Portal; Terraform ignores value changes."
+  type = object({
+    computer_vision_endpoint = string
+    computer_vision_api_key  = string
+  })
+  default = {
+    computer_vision_endpoint = ""
+    computer_vision_api_key  = ""
+  }
+  sensitive = true
 }
 
 variable "key_vault_additional_admin_principal_ids" {
   type        = list(string)
-  description = "Optional Azure AD object IDs to grant Key Vault Administrator on the project Key Vault (for example, specific user object IDs)."
+  description = "Optional Azure AD object IDs granted Key Vault Administrator and App Configuration Data Owner (for Portal edits)."
   default     = []
 
   validation {
@@ -176,7 +250,7 @@ variable "enable_network_ddos_protection_plan" {
 
 variable "enable_azure_monitor" {
   type        = bool
-  description = "Create a Log Analytics workspace and stream platform diagnostics from AKS, Key Vault, and (optionally) ACR. Log ingestion has per-GB cost."
+  description = "Create a Log Analytics workspace and stream AKS platform diagnostics. Log ingestion has per-GB cost."
   default     = true
 }
 
@@ -184,12 +258,6 @@ variable "log_analytics_retention_in_days" {
   type        = number
   description = "Log Analytics workspace retention in days (30–730 for paid tiers)."
   default     = 30
-}
-
-variable "enable_azure_monitor_acr_diagnostics" {
-  type        = bool
-  description = "When enable_azure_monitor is true, also send Container Registry diagnostics to the workspace."
-  default     = true
 }
 
 variable "enable_application_insights" {

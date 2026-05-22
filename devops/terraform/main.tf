@@ -81,14 +81,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     load_balancer_sku = "standard"
   }
 
-  # Azure Monitor / Container Insights: ships node + cluster metrics and container logs to Log Analytics.
-  # https://learn.microsoft.com/azure/azure-monitor/containers/container-insights-overview
-  dynamic "oms_agent" {
-    for_each = var.enable_azure_monitor ? [1] : []
-    content {
-      log_analytics_workspace_id = azurerm_log_analytics_workspace.main[0].id
-    }
-  }
+  # AKS diagnostics (platform logs/metrics to Log Analytics) are configured in monitoring.tf, not oms_agent here.
 }
 
 resource "azurerm_role_assignment" "aks_acr_pull" {
@@ -180,14 +173,14 @@ resource "azurerm_eventhub_namespace" "main" {
 resource "azurerm_eventhub" "image_processing" {
   name              = "image-processing"
   namespace_id      = azurerm_eventhub_namespace.main.id
-  partition_count   = 2
+  partition_count   = var.eventhub_partition_count
   message_retention = 1
 }
 
 resource "azurerm_eventhub" "ai_description" {
   name              = "ai-description"
   namespace_id      = azurerm_eventhub_namespace.main.id
-  partition_count   = 2
+  partition_count   = var.eventhub_partition_count
   message_retention = 1
 }
 

@@ -209,3 +209,18 @@ output "application_insights_log_analytics_workspace_id" {
   value       = length(azurerm_application_insights.main) > 0 ? azurerm_log_analytics_workspace.main[0].id : null
   description = "Log Analytics workspace resource ID where workspace-based App Insights stores telemetry (Kusto: AppTraces, AppRequests)."
 }
+
+output "app_configuration_name" {
+  value       = azurerm_app_configuration.main.name
+  description = "Azure App Configuration store name (az appconfig kv list -n)."
+}
+
+output "app_configuration_endpoint" {
+  value       = azurerm_app_configuration.main.endpoint
+  description = "Azure App Configuration endpoint URL for deploy scripts."
+}
+
+output "app_configuration_label" {
+  value       = "cnip"
+  description = "Label on App Configuration keys written by Terraform (deploy filters on this label)."
+}

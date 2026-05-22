@@ -8,10 +8,19 @@ namespace CloudNativeImageProcessing.Worker;
 public sealed class ImageProcessingWorkerHostedService : BackgroundService
 {
     /// <summary>
-    /// EventProcessorClient may invoke handlers concurrently across partitions (one per partition).
-    /// This gate ensures only one event is processed at a time for the whole worker process.
+    /// EventProcessorClient invokes handlers concurrently across partitions (one per partition).
+    /// This gate caps how many events are processed at once for the whole worker process.
     /// </summary>
     private static readonly SemaphoreSlim ProcessingGate = new(1, 1);
+
+    /// <summary>
+    /// Tuned for heavy per-event work: minimal local buffering.
+    /// </summary>
+    private static readonly EventProcessorClientOptions ProcessorOptions = new()
+    {
+        CacheEventCount = 1,
+        PrefetchCount = 1,
+    };
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ImageProcessingWorkerHostedService> _logger;
@@ -57,7 +66,7 @@ public sealed class ImageProcessingWorkerHostedService : BackgroundService
         var checkpointContainer = blobService.GetBlobContainerClient(checkpointContainerName);
         await checkpointContainer.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
 
-        _processor = new EventProcessorClient(checkpointContainer, group, conn, hubName);
+        _processor = new EventProcessorClient(checkpointContainer, group, conn, hubName, ProcessorOptions);
         _processor.ProcessEventAsync += OnProcessEventAsync;
         _processor.ProcessErrorAsync += OnProcessErrorAsync;
 
@@ -109,7 +118,10 @@ public sealed class ImageProcessingWorkerHostedService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error handling image-processing event.");
+                _logger.LogError(
+                    ex,
+                    "Error handling image-processing event (partition={PartitionId}).",
+                    args.Partition.PartitionId);
             }
 
             await args.UpdateCheckpointAsync(args.CancellationToken).ConfigureAwait(false);

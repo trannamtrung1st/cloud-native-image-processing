@@ -9,6 +9,12 @@ public sealed class AiGenerationWorkerHostedService : BackgroundService
 {
     private static readonly SemaphoreSlim ProcessingGate = new(1, 1);
 
+    private static readonly EventProcessorClientOptions ProcessorOptions = new()
+    {
+        CacheEventCount = 1,
+        PrefetchCount = 1,
+    };
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AiGenerationWorkerHostedService> _logger;
     private readonly IConfiguration _configuration;
@@ -52,7 +58,7 @@ public sealed class AiGenerationWorkerHostedService : BackgroundService
         var checkpointContainer = blobService.GetBlobContainerClient(checkpointContainerName);
         await checkpointContainer.CreateIfNotExistsAsync(cancellationToken: stoppingToken);
 
-        _processor = new EventProcessorClient(checkpointContainer, group, conn, hubName);
+        _processor = new EventProcessorClient(checkpointContainer, group, conn, hubName, ProcessorOptions);
         _processor.ProcessEventAsync += OnProcessEventAsync;
         _processor.ProcessErrorAsync += OnProcessErrorAsync;
 
@@ -103,7 +109,10 @@ public sealed class AiGenerationWorkerHostedService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error handling AI generation event.");
+                _logger.LogError(
+                    ex,
+                    "Error handling AI generation event (partition={PartitionId}).",
+                    args.Partition.PartitionId);
             }
 
             await args.UpdateCheckpointAsync(args.CancellationToken).ConfigureAwait(false);

@@ -1,22 +1,12 @@
-# Azure Monitor: Log Analytics workspace + resource diagnostics (platform logs/metrics).
+# Azure Monitor: Log Analytics workspace + AKS platform diagnostics.
 # https://learn.microsoft.com/azure/azure-monitor/
 
 locals {
-  monitor_enabled    = var.enable_azure_monitor
-  appinsights_name   = var.application_insights_name != "" ? var.application_insights_name : "${var.prefix}-appinsights"
+  monitor_enabled  = var.enable_azure_monitor
+  appinsights_name = var.application_insights_name != "" ? var.application_insights_name : "${var.prefix}-appinsights"
 }
 
 resource "random_string" "law_suffix" {
-  length  = 5
-  lower   = true
-  upper   = false
-  numeric = true
-  special = false
-}
-
-# Unique per Terraform state so platform diagnostic settings never collide with names already in Azure
-# when state was empty/lost but resources remained (fixed names like {prefix}-aks-diag always failed).
-resource "random_string" "diag_suffix" {
   length  = 5
   lower   = true
   upper   = false
@@ -35,11 +25,11 @@ resource "azurerm_log_analytics_workspace" "main" {
   tags                = var.tags
 }
 
-# AKS — audit, API server, Defender for Cloud (guard), and platform metrics.
+# AKS platform logs and metrics to Log Analytics (kube-audit, apiserver, guard, cluster-autoscaler).
 resource "azurerm_monitor_diagnostic_setting" "aks" {
   count = local.monitor_enabled ? 1 : 0
 
-  name                       = "${var.prefix}-aks-diag-${random_string.diag_suffix.result}"
+  name                       = "${var.prefix}-aks-diag"
   target_resource_id         = azurerm_kubernetes_cluster.main.id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main[0].id
 
@@ -61,42 +51,6 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   }
 }
 
-resource "azurerm_monitor_diagnostic_setting" "key_vault" {
-  count = local.monitor_enabled ? 1 : 0
-
-  name                       = "${var.prefix}-kv-diag-${random_string.diag_suffix.result}"
-  target_resource_id         = azurerm_key_vault.main.id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.main[0].id
-
-  enabled_log {
-    category = "AuditEvent"
-  }
-
-  enabled_metric {
-    category = "AllMetrics"
-  }
-}
-
-resource "azurerm_monitor_diagnostic_setting" "acr" {
-  count = local.monitor_enabled && var.enable_azure_monitor_acr_diagnostics ? 1 : 0
-
-  name                       = "${var.prefix}-acr-diag-${random_string.diag_suffix.result}"
-  target_resource_id         = azurerm_container_registry.main.id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.main[0].id
-
-  enabled_log {
-    category = "ContainerRegistryRepositoryEvents"
-  }
-
-  enabled_metric {
-    category = "AllMetrics"
-  }
-}
-
-# Application Insights (workspace-based) — SDK telemetry is stored in the linked Log Analytics workspace.
-# Portal: App Insights → Transaction search / Logs runs Kusto against workspace tables (e.g. AppTraces, AppRequests),
-# not the classic Application Insights-only schema. Allow a few minutes after deploy for ingestion.
-# https://learn.microsoft.com/azure/azure-monitor/app/app-insights-overview
 resource "azurerm_application_insights" "main" {
   count = local.monitor_enabled && var.enable_application_insights ? 1 : 0
 
@@ -118,4 +72,8 @@ resource "azurerm_key_vault_secret" "application_insights_connection_string" {
   key_vault_id = azurerm_key_vault.main.id
   content_type = "text/plain"
   depends_on   = [azurerm_role_assignment.terraform_kv_admin]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }

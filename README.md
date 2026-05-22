@@ -23,18 +23,21 @@ Cloud-native image library: users sign in with **ASP.NET Core Identity**, upload
 | UI                 | React (Vite) SPA                                                                                                                                 |
 | API & workers      | .NET 10, Clean Architecture                                                                                                                      |
 | Containers         | Docker images for API, workers, and frontend (build/push details in [`devops/README.md`](devops/README.md))                                      |
-| Local stack        | **Docker Compose** — `docker-compose.yml`, `docker-compose.backend.yml`, `docker-compose-infra.yml` (see [`devops/README.md`](devops/README.md)) |
+| Local stack        | **Docker Compose** — `docker-compose.yml`, `docker-compose-backend.yml`, `docker-compose-infra.yml` (see [`devops/README.md`](devops/README.md)) |
 | Production compute | **Azure Kubernetes Service (AKS)** — workloads deployed with **Helm** (`devops/helm/cloud-native-image-processing`)                              |
 | Data               | PostgreSQL (EF Core), **Azure Managed Redis**, Azure Blob Storage                                                                                |
 | Messaging          | Azure Event Hubs (`image-processing`, `ai-description`; local emulator in Compose)                                                               |
 | Production edge    | Azure Front Door, WAF/DDoS (typical reference design)                                                                                            |
 | Notifications      | Azure Logic Apps (email after upload/processing)                                                                                                 |
-| Observability      | Azure Monitor (Log Analytics, AKS diagnostics + Container Insights, optional Application Insights for app telemetry)                             |
+| Observability      | Azure Monitor (Log Analytics, AKS platform diagnostics, optional Application Insights for app telemetry)                             |
+| Runtime config     | **Azure App Configuration** + **Key Vault** — seeded once by Terraform; values managed in Portal; deploy reads App Config into Helm, CSI syncs KV (see [`devops/README.md`](devops/README.md#managing-configuration-in-azure-portal)) |
 | AI                 | Azure Computer Vision (image description)                                                                                                        |
 
 ## # Operations and deployment
 
-**Use a single guide:** [`devops/README.md`](devops/README.md) — **local** Docker Compose steps and **production** Terraform → scripts → Helm (Key Vault only, no manual cluster secrets).
+**Use a single guide:** [`devops/README.md`](devops/README.md) — **local** Docker Compose steps and **production** Terraform → App Configuration → Helm (Key Vault only, no manual cluster secrets).
+
+**Terraform variables:** three files — `config.auto.tfvars` (infra), `app.auto.tfvars` (app settings seed), `vault-secrets.auto.tfvars` (Key Vault secret seed). Values are then managed in Azure Portal; deploy reads App Config + Key Vault. Details: [`devops/terraform/README.md`](devops/terraform/README.md).
 
 For UI or backend development details only, see the component READMEs linked in the table above.
 
@@ -128,7 +131,9 @@ Same as step 5, but choose `Storage Blob Data Owner` role and no need conditions
    | -------------------------- | -------------- |
    | TERRAFORM_USE_REMOTE_STATE | true           |
    | USE_TERRAFORM_OUTPUTS      | true           |
-   
+   | TERRAFORM_CONFIG_TFVARS    | Full text of [`config.auto.tfvars.example`](devops/terraform/config.auto.tfvars.example) — infra only (`resource_group_name`, `prefix`, AKS, monitor, `key_vault_additional_admin_principal_ids`). |
+   | TERRAFORM_APP_TFVARS       | Full text of [`app.auto.tfvars.example`](devops/terraform/app.auto.tfvars.example) — initial `cnip_app_settings` (CORS, replicas, demo delays). After apply, edit in Azure Portal. |
+
 ### Step 12: Setup Actions environment secrets:
 1. In the environment `Production` page, find `Environment secrets` section
 2. Click on add new button
@@ -137,13 +142,14 @@ Same as step 5, but choose `Storage Blob Data Owner` role and no need conditions
    | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
    | AZURE_CLIENT_ID              | `Microsoft Entra ID` -> `App Registrations` -> `All applications` -> click on your app -> copy `Application (client) ID` |
    | AZURE_TENANT_ID              | `Microsoft Entra ID` -> copy `Tenant ID`                                                                                 |
-   | KEYVAULT_ADMIN_PRINCIPAL_IDS | `Microsoft Entra ID` -> `Users` -> your user -> copy `Object ID`                                                         |
    | AZURE_SUBSCRIPTION_ID        | `Subscriptions` -> go to your newly created subscription -> copy `Subscription ID`                                       |
-   | TERRAFORM_TFVARS             | This repository -> Copy `devops/terraform/terraform.tfvars.example` file content                                         |
+   | TERRAFORM_VAULT_SECRETS_TFVARS | Full text of [`vault-secrets.auto.tfvars.example`](devops/terraform/vault-secrets.auto.tfvars.example) — `cnip_vault_secrets_init` (optional Computer Vision). After apply, edit secrets in Key Vault Portal. |
    | TF_STATE_CONTAINER           | `cnip-terraform`                                                                                                         |
    | TF_STATE_KEY                 | `production/tf.state`                                                                                                    |
    | TF_STATE_RESOURCE_GROUP      | `cnip-terraform`                                                                                                         |
    | TF_STATE_STORAGE_ACCOUNT     | `<random-storage-account-name>`, from 3-24 lowercase letters and numbers (e.g. `cnipsatrungtran`)                        |
+
+If you previously used **`TERRAFORM_TFVARS`**, **`TERRAFORM_SECRETS_TFVARS`**, or **`KEYVAULT_ADMIN_PRINCIPAL_IDS`**, migrate to the three tfvars above (see [`devops/README.md`](devops/README.md#configuration-three-tfvars--portal)).
    
 ### Step 13: Run Terraform workflow to provision Azure resources:
 1. Go to `Actions`
@@ -155,16 +161,24 @@ Same as step 5, but choose `Storage Blob Data Owner` role and no need conditions
 7. Click on `Run workflow` button
 8. Wait for the workflow to finish
 
+This creates Azure infrastructure and **seeds** App Configuration keys and Key Vault secrets from your three tfvars. Later value changes belong in **Azure Portal** (see [`devops/README.md` — Managing configuration in Azure Portal](devops/README.md#managing-configuration-in-azure-portal)).
 
 ### Step 14: Run Deploy to Azure workflow to deploy the application:
 1. Go to `Actions`
 2. Select `Deploy to Azure` workflow
 3. Choose `Run workflow` to open modal
-4. Enter `<version-number>` (e.g. `1.0.0`)
+4. Enter `<version-number>` (e.g. `1.0.0`) as **Image tag**, or leave empty to use the short Git SHA
 5. Click on `Run workflow` button
-6. Wait for the workflow to finish
+6. Wait for the workflow to finish — it reads **live** App Configuration into Helm (`appconfig.overrides.yaml`) for ConfigMap settings and replica counts; **Key Vault** secrets are synced into pods via CSI (not from tfvars at deploy time)
 
 ### Step 15: Access the application:
 1. In Azure Portal, search `Public IP addresses`
 2. Click on IP `kubernetes-...`
 3. Copy the DNS label and paste it into your browser
+
+### Step 16 (optional): Change app settings or secrets later:
+1. **App settings** (CORS, replicas, delays): Azure Portal → App Configuration → label `cnip` → edit keys → run **Deploy to Azure** again
+2. **Secrets** (e.g. Computer Vision): Azure Portal → Key Vault → Secrets → edit → restart CNIP pods or redeploy
+3. **Infrastructure** (AKS size, Front Door): edit `config.auto.tfvars` / `TERRAFORM_CONFIG_TFVARS` → run **Terraform (manual)** apply
+
+Details: [`devops/README.md`](devops/README.md#managing-configuration-in-azure-portal).

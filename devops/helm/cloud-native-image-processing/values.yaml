@@ -1,5 +1,6 @@
-# Default values — local / demo Kubernetes (ingress-nginx). For Azure AKS: use this file and pass
-# --set keyVault.enabled=true --set applicationInsights.enabled=true --set-string acrLoginServer=... --set-string keyVault.* from terraform output (see devops/README.md).
+# Default values — local / demo Kubernetes (ingress-nginx).
+# Azure AKS: use -f values.yaml -f appconfig.overrides.yaml (from live App Configuration; see devops/README.md).
+# Key Vault secrets are synced by CSI at runtime, not from this file. Infra/app/vault tfvars: devops/terraform/README.md.
 nameOverride: ""
 fullnameOverride: ""
 
@@ -28,9 +29,9 @@ config:
     checkpointContainerName: eh-checkpoints
   # Demo artificial delays (ms); use small non-zero values in workshops to make steps visible; keep "0" normally.
   demo:
-    getByIdDelayMs: "0"
-    grayscaleProcessingDelayMs: "0"
-    aiDescriptionProcessingDelayMs: "0"
+    getByIdDelayMs: "2000"
+    grayscaleProcessingDelayMs: "5000"
+    aiDescriptionProcessingDelayMs: "2000"
   upload:
     maxRequestBodyBytes: "10485760"
   identity:
@@ -88,7 +89,7 @@ api:
       cpu: 100m
       memory: 256Mi
     limits:
-      cpu: "1"
+      cpu: 200m
       memory: 512Mi
 
 worker:
@@ -103,7 +104,7 @@ worker:
       cpu: 100m
       memory: 256Mi
     limits:
-      cpu: "2"
+      cpu: 200m
       memory: 1Gi
 
 aiWorker:
@@ -118,7 +119,7 @@ aiWorker:
       cpu: 100m
       memory: 256Mi
     limits:
-      cpu: "1"
+      cpu: 200m
       memory: 512Mi
 
 frontend:
@@ -137,7 +138,7 @@ frontend:
       cpu: 50m
       memory: 64Mi
     limits:
-      cpu: 500m
+      cpu: 100m
       memory: 128Mi
 
 ingress:

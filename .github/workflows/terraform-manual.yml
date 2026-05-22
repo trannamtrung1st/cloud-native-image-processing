@@ -11,11 +11,9 @@
 # Optional environment variable for bootstrap creation:
 # - TF_STATE_LOCATION (default: southeastasia) used only when creating the state storage account if missing.
 #
-# Required environment secrets (when that environment runs this workflow): AZURE_CLIENT_ID, AZURE_TENANT_ID,
-# AZURE_SUBSCRIPTION_ID, TERRAFORM_TFVARS. When TERRAFORM_USE_REMOTE_STATE is true: TF_STATE_RESOURCE_GROUP,
-# TF_STATE_STORAGE_ACCOUNT, TF_STATE_CONTAINER, TF_STATE_KEY.
-# Optional environment secret: KEYVAULT_ADMIN_PRINCIPAL_IDS (comma/newline-separated Azure AD object IDs
-# to also grant Key Vault Administrator role).
+# Required environment secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+#   TERRAFORM_VAULT_SECRETS_TFVARS (vault-secrets.auto.tfvars). When TERRAFORM_USE_REMOTE_STATE is true: TF_STATE_*.
+# Required environment variables: TERRAFORM_CONFIG_TFVARS (infra), TERRAFORM_APP_TFVARS (app settings seed).
 # Required RBAC on the Terraform state storage account/container for the OIDC principal:
 # - Storage Blob Data Contributor (recommended, via use_azuread_auth=true in backend init below)
 #
@@ -67,11 +65,13 @@ jobs:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_CLI_ARGS_plan: "-parallelism=10"
+      TF_CLI_ARGS_apply: "-parallelism=10"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Azure login (backend bootstrap)
+      - name: Azure login (OIDC)
         if: ${{ vars.TERRAFORM_USE_REMOTE_STATE == 'true' }}
         uses: azure/login@v2
         with:
@@ -85,7 +85,9 @@ jobs:
           echo "github_ref_name=${{ github.ref_name }}"
           echo "terraform_action=${{ inputs.action }}"
           echo "bootstrap_state=${{ inputs.bootstrap_state }}"
-          echo "keyvault_admin_principal_ids_secret_set=$([ -n "${{ secrets.KEYVAULT_ADMIN_PRINCIPAL_IDS }}" ] && echo true || echo false)"
+          echo "terraform_config_tfvars_set=$([ -n "${{ vars.TERRAFORM_CONFIG_TFVARS }}" ] && echo true || echo false)"
+          echo "terraform_app_tfvars_set=$([ -n "${{ vars.TERRAFORM_APP_TFVARS }}" ] && echo true || echo false)"
+          echo "terraform_vault_secrets_tfvars_set=$([ -n "${{ secrets.TERRAFORM_VAULT_SECRETS_TFVARS }}" ] && echo true || echo false)"
           echo "github_repository=${{ github.repository }}"
           echo "github_ref=${{ github.ref }}"
           echo "github_sha=${{ github.sha }}"
@@ -170,51 +172,49 @@ jobs:
               --output none
           fi
 
-      - name: Write terraform.tfvars from secret
+      - name: Write config.auto.tfvars from environment variable
         env:
-          TERRAFORM_TFVARS: ${{ secrets.TERRAFORM_TFVARS }}
+          TERRAFORM_CONFIG_TFVARS: ${{ vars.TERRAFORM_CONFIG_TFVARS }}
         run: |
           set -euo pipefail
-          if [ -z "${TERRAFORM_TFVARS}" ]; then
-            echo "Set environment secret TERRAFORM_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\" (or repository fallback)."
+          if [ -z "${TERRAFORM_CONFIG_TFVARS}" ]; then
+            echo "Set environment variable TERRAFORM_CONFIG_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\" (copy from config.auto.tfvars.example)."
             exit 1
           fi
           python3 - <<'PY'
           import os
-          with open("terraform.tfvars", "w", encoding="utf-8") as f:
-              f.write(os.environ["TERRAFORM_TFVARS"])
+          with open("config.auto.tfvars", "w", encoding="utf-8") as f:
+              f.write(os.environ["TERRAFORM_CONFIG_TFVARS"])
           PY
 
-      - name: Write CI override tfvars from environment secret
+      - name: Write app.auto.tfvars from environment variable
         env:
-          KEYVAULT_ADMIN_PRINCIPAL_IDS: ${{ secrets.KEYVAULT_ADMIN_PRINCIPAL_IDS }}
+          TERRAFORM_APP_TFVARS: ${{ vars.TERRAFORM_APP_TFVARS }}
         run: |
           set -euo pipefail
+          if [ -z "${TERRAFORM_APP_TFVARS}" ]; then
+            echo "Set environment variable TERRAFORM_APP_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\" (copy from app.auto.tfvars.example)."
+            exit 1
+          fi
           python3 - <<'PY'
-          import json
           import os
-          import re
-          import sys
+          with open("app.auto.tfvars", "w", encoding="utf-8") as f:
+              f.write(os.environ["TERRAFORM_APP_TFVARS"])
+          PY
 
-          raw = os.environ.get("KEYVAULT_ADMIN_PRINCIPAL_IDS", "")
-          # Accept comma and/or newline separated values from environment secret.
-          values = [v.strip() for v in re.split(r"[\n,]", raw) if v.strip()]
-          guid_pattern = re.compile(r"^[0-9a-fA-F-]{36}$")
-          invalid = [v for v in values if not guid_pattern.match(v)]
-          if invalid:
-              print(
-                  "Invalid keyvault_admin_principal_ids values (must be Azure AD object ID GUIDs): "
-                  + ", ".join(invalid),
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-
-          with open("ci_override.auto.tfvars", "w", encoding="utf-8") as f:
-              f.write(
-                  "key_vault_additional_admin_principal_ids = "
-                  + json.dumps(values)
-                  + "\n"
-              )
+      - name: Write vault-secrets.auto.tfvars from environment secret
+        env:
+          TERRAFORM_VAULT_SECRETS_TFVARS: ${{ secrets.TERRAFORM_VAULT_SECRETS_TFVARS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TERRAFORM_VAULT_SECRETS_TFVARS}" ]; then
+            echo "Set environment secret TERRAFORM_VAULT_SECRETS_TFVARS on \"${TARGET_GITHUB_ENVIRONMENT}\" (copy from vault-secrets.auto.tfvars.example)."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          with open("vault-secrets.auto.tfvars", "w", encoding="utf-8") as f:
+              f.write(os.environ["TERRAFORM_VAULT_SECRETS_TFVARS"])
           PY
 
       - name: Write CI-only Azure backend block
@@ -255,12 +255,12 @@ jobs:
 
       - name: Terraform plan
         if: ${{ inputs.action == 'plan' }}
-        run: terraform plan -input=false -no-color
+        run: terraform plan -input=false -no-color -parallelism=10
 
       - name: Terraform plan (apply)
         if: ${{ inputs.action == 'apply' }}
-        run: terraform plan -input=false -no-color -out=tfplan
+        run: terraform plan -input=false -no-color -parallelism=10 -out=tfplan
 
       - name: Terraform apply
         if: ${{ inputs.action == 'apply' }}
-        run: terraform apply -input=false -auto-approve -no-color tfplan
+        run: terraform apply -input=false -auto-approve -no-color -parallelism=10 tfplan

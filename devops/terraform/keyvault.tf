@@ -54,68 +54,12 @@ resource "azurerm_role_assignment" "workload_kv_secrets_user" {
   principal_id         = azurerm_user_assigned_identity.workload.principal_id
 }
 
-resource "azurerm_key_vault_secret" "postgres_connection_string" {
-  name         = "postgres-connection-string"
-  value        = local.postgres_connection_string
-  key_vault_id = azurerm_key_vault.main.id
-  content_type = "text/plain"
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
-resource "azurerm_key_vault_secret" "blob_storage_connection_string" {
-  name         = "blob-storage-connection-string"
-  value        = azurerm_storage_account.main.primary_connection_string
-  key_vault_id = azurerm_key_vault.main.id
-  content_type = "text/plain"
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
-resource "azurerm_key_vault_secret" "eventhub_connection_string_image" {
-  name         = "eventhub-connection-string-image-processing"
-  value        = azurerm_eventhub_namespace_authorization_rule.app.primary_connection_string
-  key_vault_id = azurerm_key_vault.main.id
-  content_type = "text/plain"
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
-resource "azurerm_key_vault_secret" "eventhub_connection_string_ai" {
-  name         = "eventhub-connection-string-ai-description"
-  value        = azurerm_eventhub_namespace_authorization_rule.app.primary_connection_string
-  key_vault_id = azurerm_key_vault.main.id
-  content_type = "text/plain"
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
-resource "azurerm_key_vault_secret" "redis_connection_string" {
-  name         = "redis-connection-string"
-  value        = local.redis_connection_string
-  key_vault_id = azurerm_key_vault.main.id
-  content_type = "text/plain"
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
-resource "azurerm_key_vault_secret" "computer_vision_endpoint" {
-  name         = "computer-vision-endpoint"
-  value        = var.computer_vision_endpoint
-  key_vault_id = azurerm_key_vault.main.id
-  content_type = "text/plain"
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
-resource "azurerm_key_vault_secret" "computer_vision_api_key" {
-  name         = "computer-vision-api-key"
-  value        = var.computer_vision_api_key
-  key_vault_id = azurerm_key_vault.main.id
-  content_type = "text/plain"
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
 resource "azurerm_federated_identity_credential" "cnip_workload" {
-  name      = "${var.prefix}-fed-cnip-workload"
-  parent_id = azurerm_user_assigned_identity.workload.id
-  audience  = ["api://AzureADTokenExchange"]
-  issuer    = azurerm_kubernetes_cluster.main.oidc_issuer_url
-  subject   = "system:serviceaccount:${var.kubernetes_namespace}:${var.workload_service_account_name}"
+  name                      = "${var.prefix}-fed-cnip-workload"
+  user_assigned_identity_id = azurerm_user_assigned_identity.workload.id
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = azurerm_kubernetes_cluster.main.oidc_issuer_url
+  subject                   = "system:serviceaccount:${var.kubernetes_namespace}:${var.workload_service_account_name}"
 
   depends_on = [
     azurerm_kubernetes_cluster.main,

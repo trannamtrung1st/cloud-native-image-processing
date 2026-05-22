@@ -6,6 +6,7 @@
 #
 # Sets: CNIP_ACR_LOGIN_SERVER, CNIP_PUBLIC_APP_URL (browser origin for frontend build).
 # Requires: terraform applied for devops/terraform and outputs available.
+# App settings and vault secrets are not read here — see App Configuration + Key Vault in devops/README.md.
 # Not using `set -e` so a failed `terraform output` does not close an interactive shell when sourced.
 
 if [[ -n "${BASH_SOURCE[0]:-}" ]]; then

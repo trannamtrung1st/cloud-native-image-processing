@@ -77,7 +77,7 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
             image.Operation.ToString(),
             image.Name);
 
-        await SendAsync(_processingClient, payload, cancellationToken);
+        await SendAsync(_processingClient, payload, image.Id.ToString(), cancellationToken);
         _logger.LogInformation(
             "Published image-processing event for image {ImageId}, operation {Operation}.",
             image.Id,
@@ -105,13 +105,18 @@ public sealed class EventHubImageEventPublisher : IImageEventPublisher, IAsyncDi
             hasManual,
             hasManual ? manualDescriptionHint : null);
 
-        await SendAsync(_aiClient, payload, cancellationToken);
+        await SendAsync(_aiClient, payload, image.Id.ToString(), cancellationToken);
     }
 
-    private static async Task SendAsync<T>(EventHubProducerClient client, T payload, CancellationToken cancellationToken)
+    private static async Task SendAsync<T>(
+        EventHubProducerClient client,
+        T payload,
+        string partitionKey,
+        CancellationToken cancellationToken)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
-        using var batch = await client.CreateBatchAsync(cancellationToken);
+        var batchOptions = new CreateBatchOptions { PartitionKey = partitionKey };
+        using var batch = await client.CreateBatchAsync(batchOptions, cancellationToken);
         if (!batch.TryAdd(new EventData(bytes)))
         {
             throw new InvalidOperationException("Event is too large for a single Event Hub batch.");

@@ -8,3 +8,6 @@
 3. Ingress host(s):{{- range .Values.ingress.hosts }} {{ .host }}{{- end }}{{- if .Values.ingress.className }} (class: {{ .Values.ingress.className }}){{- end }}
 {{- end }}
 4. Build the frontend image with VITE_API_BASE_URL pointing at the public URL where /api is served (same scheme+host as Ingress, e.g. http://cnip.demo.local for defaults).
+{{- if .Values.keyVault.enabled }}
+5. On Azure AKS, app ConfigMap settings and replica counts are usually supplied via appconfig.overrides.yaml from Azure App Configuration (see devops/README.md).
+{{- end }}

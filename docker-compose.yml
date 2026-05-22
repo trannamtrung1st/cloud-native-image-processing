@@ -1,7 +1,7 @@
 # Full stack: infrastructure + API + workers + frontend.
 #   docker compose up
 #
-# Backend only (no UI container): docker compose -f docker-compose.backend.yml up
+# Backend only (no UI container): docker compose -f docker-compose-backend.yml up
 #
 # Azure/ACR: export CNIP_* in the shell (see devops/scripts/export-compose-env-from-terraform.sh) or use Compose defaults for local-only tags. Build/push app images:
 #   docker compose build api image-processing-worker ai-generation-worker frontend
@@ -11,7 +11,7 @@ x-build-linux-amd64: &build-linux-amd64
     - linux/amd64
 
 include:
-  - path: docker-compose.backend.yml
+  - path: docker-compose-backend.yml
 
 services:
   frontend:

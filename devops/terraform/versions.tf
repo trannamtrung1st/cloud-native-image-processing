@@ -5,7 +5,7 @@ terraform {
     azurerm = {
       source = "hashicorp/azurerm"
       # azurerm_managed_redis requires a recent 4.x provider.
-      version = ">= 4.56.0, < 5.0"
+      version = "=4.74.0"
     }
     random = {
       source  = "hashicorp/random"

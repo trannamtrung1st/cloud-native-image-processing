@@ -13,8 +13,10 @@
 #
 # Typical environment secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME, CNIP_ACR_LOGIN_SERVER,
 # CNIP_PUBLIC_APP_URL, AKS_RESOURCE_GROUP, AKS_CLUSTER_NAME, KEY_VAULT_NAME, WORKLOAD_IDENTITY_CLIENT_ID.
-# Typical environment variables: K8S_NAMESPACE (optional, default cnip), HELM_APPLICATION_INSIGHTS_ENABLED (optional),
-# FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS (optional, default 5).
+# Typical environment variables: K8S_NAMESPACE (optional, default cnip).
+# Runtime config: live App Configuration → appconfig-to-helm-values.py → Helm ConfigMap/replicas.
+# Key Vault → CSI at pod start (not tfvars). Portal is source of truth after Terraform seed (devops/README.md).
+# When not using USE_TERRAFORM_OUTPUTS: set secret APP_CONFIGURATION_NAME (App Configuration store name).
 # Optional mode: set environment variable USE_TERRAFORM_OUTPUTS=true to read deploy values from Terraform remote state outputs
 # (requires TF_STATE_* secrets and TERRAFORM_USE_REMOTE_STATE=true on that environment).
 #
@@ -145,6 +147,7 @@ jobs:
             || true
           )"
           CNIP_PUBLIC_APP_URL="${CNIP_PUBLIC_APP_URL:-http://localhost:8080}"
+          APP_CONFIGURATION_NAME="$(tf_output_raw app_configuration_name)"
           {
             echo "ACR_NAME=${ACR_NAME}"
             echo "CNIP_ACR_LOGIN_SERVER=${CNIP_ACR_LOGIN_SERVER}"
@@ -153,7 +156,24 @@ jobs:
             echo "KEY_VAULT_NAME=${KEY_VAULT_NAME}"
             echo "WORKLOAD_IDENTITY_CLIENT_ID=${WORKLOAD_IDENTITY_CLIENT_ID}"
             echo "CNIP_PUBLIC_APP_URL=${CNIP_PUBLIC_APP_URL}"
+            echo "APP_CONFIGURATION_NAME=${APP_CONFIGURATION_NAME}"
           } >> "${GITHUB_ENV}"
+
+      - name: Generate Helm overrides from App Configuration
+        env:
+          APP_CONFIGURATION_NAME: ${{ env.APP_CONFIGURATION_NAME || secrets.APP_CONFIGURATION_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "${APP_CONFIGURATION_NAME}" || {
+            echo "Set APP_CONFIGURATION_NAME (environment secret) or USE_TERRAFORM_OUTPUTS=true after Terraform apply."
+            exit 1
+          }
+          python3 devops/scripts/appconfig-to-helm-values.py \
+            --app-config-name "${APP_CONFIGURATION_NAME}" \
+            --label cnip \
+            -o appconfig.overrides.yaml
+          FRONTEND_REFRESH="$(grep -E '^\s+imagesRefreshIntervalSeconds:' appconfig.overrides.yaml | awk '{print $2}' | tr -d '"' || echo 5)"
+          echo "CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS=${FRONTEND_REFRESH}" >> "${GITHUB_ENV}"
 
       - name: ACR login
         run: az acr login -n "${ACR_NAME:-${{ secrets.ACR_NAME }}}"
@@ -163,7 +183,7 @@ jobs:
         env:
           CNIP_ACR_LOGIN_SERVER: ${{ env.CNIP_ACR_LOGIN_SERVER || secrets.CNIP_ACR_LOGIN_SERVER }}
           CNIP_PUBLIC_APP_URL: ${{ env.CNIP_PUBLIC_APP_URL || secrets.CNIP_PUBLIC_APP_URL }}
-          CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS: ${{ vars.FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS || '5' }}
+          CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS: ${{ env.CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS || '5' }}
           CNIP_IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
@@ -182,31 +202,28 @@ jobs:
         with:
           version: v3.14.4
 
-      - name: Helm upgrade (Key Vault + ACR + workload identity)
+      - name: Helm upgrade (Key Vault + ACR + App Configuration overrides)
         env:
           K8S_NAMESPACE: ${{ vars.K8S_NAMESPACE || 'cnip' }}
           CNIP_IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
           NS="${K8S_NAMESPACE:-cnip}"
-          if [ "${{ vars.HELM_APPLICATION_INSIGHTS_ENABLED }}" = "false" ]; then
-            AI_ENABLED=false
-          else
-            AI_ENABLED=true
-          fi
-          FRONTEND_REFRESH_INTERVAL="${{ vars.FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS || '5' }}"
+          test -f appconfig.overrides.yaml || {
+            echo "Missing appconfig.overrides.yaml — run Generate Helm overrides from App Configuration step first."
+            exit 1
+          }
           helm upgrade --install "${{ env.HELM_RELEASE_NAME }}" "${{ env.HELM_CHART_PATH }}" \
             --namespace "$NS" \
             --create-namespace \
             -f "${{ env.HELM_VALUES_FILE }}" \
+            -f appconfig.overrides.yaml \
             --wait --timeout 10m \
             --set-string api.image.tag="${CNIP_IMAGE_TAG}" \
             --set-string worker.image.tag="${CNIP_IMAGE_TAG}" \
             --set-string aiWorker.image.tag="${CNIP_IMAGE_TAG}" \
             --set-string frontend.image.tag="${CNIP_IMAGE_TAG}" \
             --set keyVault.enabled=true \
-            --set applicationInsights.enabled="${AI_ENABLED}" \
-            --set-string frontend.imagesRefreshIntervalSeconds="${FRONTEND_REFRESH_INTERVAL}" \
             --set-string acrLoginServer="${CNIP_ACR_LOGIN_SERVER:-${{ secrets.CNIP_ACR_LOGIN_SERVER }}}" \
             --set-string keyVault.tenantId="${{ secrets.AZURE_TENANT_ID }}" \
             --set-string keyVault.vaultName="${KEY_VAULT_NAME:-${{ secrets.KEY_VAULT_NAME }}}" \

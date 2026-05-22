@@ -24,6 +24,16 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ include "cnip.fullname" . }}-config
 {{- end -}}
 
+{{/*
+Pod template annotations: change when ConfigMap or synced Secret mapping changes so Deployments roll out.
+*/}}
+{{- define "cnip.checksumAnnotations" -}}
+checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+{{- if .Values.keyVault.enabled }}
+checksum/secret: {{ include (print $.Template.BasePath "/keyvault-secret-provider-class.yaml") . | sha256sum }}
+{{- end }}
+{{- end -}}
+
 {{- define "cnip.imageRef" -}}
 {{- $g := index .root.Values "global" | default dict -}}
 {{- $gReg := index $g "imageRegistry" | default "" | trimSuffix "/" -}}
