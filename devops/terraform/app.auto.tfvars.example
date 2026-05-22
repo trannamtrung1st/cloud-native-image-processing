@@ -29,5 +29,7 @@ cnip_app_settings = {
     frontend_replica_count                   = 1
     application_insights_enabled             = true
     frontend_images_refresh_interval_seconds = "5"
+    # Bump in Portal (e.g. "2", "3") then redeploy to restart API/workers after Key Vault changes.
+    deployment_reload_trigger                = "1"
   }
 }

@@ -66,7 +66,7 @@ terraform output -raw aks_kube_config_command
 | Change type | Where to edit | Then |
 |-------------|---------------|------|
 | CORS, replicas, demo delays, hub names | App Configuration (label `cnip`) | Redeploy Helm (CI or `appconfig-to-helm-values.py` + `helm upgrade`) |
-| Connection strings, Computer Vision keys | Key Vault secrets | Restart pods / wait for CSI sync (redeploy optional) |
+| Connection strings, Computer Vision keys | Key Vault secrets | Bump `cnip/helm/deployment_reload_trigger` in App Configuration, then redeploy Helm |
 | AKS nodes, Front Door, monitor toggles | `config.auto.tfvars` | `terraform apply` |
 
 Key and secret name reference: [`../README.md` — Managing configuration in Azure Portal](../README.md#managing-configuration-in-azure-portal).

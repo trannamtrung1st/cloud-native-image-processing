@@ -15,6 +15,10 @@ acrLoginServer: ""
 
 imagePullSecrets: []
 
+# Bump after Key Vault secret changes (Portal: cnip/helm/deployment_reload_trigger), then helm upgrade / Deploy workflow.
+# Changes pod checksum annotations and ConfigMap CNIP_DEPLOYMENT_RELOAD_TRIGGER so API/workers roll out and re-read cnip-app-secrets.
+deploymentReloadTrigger: "1"
+
 # Non-sensitive config (ASP.NET Core env: Section__Key)
 config:
   aspnetcoreEnvironment: Production

@@ -231,6 +231,7 @@ Portal: **App Configuration** → your store (`terraform output -raw app_configu
 | `cnip/helm/frontend_replica_count` | `frontend.replicaCount` |
 | `cnip/helm/application_insights_enabled` | `true` or `false` |
 | `cnip/helm/frontend_images_refresh_interval_seconds` | Frontend poll interval (also used at image build in CI) |
+| `cnip/helm/deployment_reload_trigger` | Bump (e.g. `1` → `2`) then redeploy to restart pods and reload Key Vault secrets from `cnip-app-secrets` |
 
 ### Key Vault secrets
 
@@ -246,5 +247,7 @@ Portal: **Key Vault** → **Secrets** (`terraform output -raw key_vault_name`). 
 | `application-insights-connection-string` | Terraform when `enable_application_insights = true` |
 | `computer-vision-endpoint` | Initial `vault-secrets.auto.tfvars`; then Portal |
 | `computer-vision-api-key` | Initial `vault-secrets.auto.tfvars`; then Portal |
+
+After editing Key Vault secret **values**, wait ~2 minutes for CSI sync (or confirm the Kubernetes secret), then bump **`cnip/helm/deployment_reload_trigger`** in App Configuration and run **Deploy to Azure** (or `appconfig-to-helm-values.py` + `helm upgrade`). That changes Helm checksum annotations and restarts API, workers, AI worker, and frontend so pods pick up the updated `cnip-app-secrets`.
 
 **Infra-only changes** (AKS size, Front Door, new region) still require editing `config.auto.tfvars` and `terraform apply` — not the Portal tables above.

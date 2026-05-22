@@ -29,9 +29,14 @@ Pod template annotations: change when ConfigMap or synced Secret mapping changes
 */}}
 {{- define "cnip.checksumAnnotations" -}}
 checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+checksum/reload-trigger: {{ (.Values.deploymentReloadTrigger | default "1") | toString | sha256sum }}
 {{- if .Values.keyVault.enabled }}
 checksum/secret: {{ include (print $.Template.BasePath "/keyvault-secret-provider-class.yaml") . | sha256sum }}
 {{- end }}
+{{- end -}}
+
+{{- define "cnip.reloadTriggerAnnotation" -}}
+checksum/reload-trigger: {{ (.Values.deploymentReloadTrigger | default "1") | toString | sha256sum }}
 {{- end -}}
 
 {{- define "cnip.imageRef" -}}

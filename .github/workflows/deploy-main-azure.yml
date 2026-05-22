@@ -15,7 +15,7 @@
 # CNIP_PUBLIC_APP_URL, AKS_RESOURCE_GROUP, AKS_CLUSTER_NAME, KEY_VAULT_NAME, WORKLOAD_IDENTITY_CLIENT_ID.
 # Typical environment variables: K8S_NAMESPACE (optional, default cnip).
 # Runtime config: live App Configuration → appconfig-to-helm-values.py → Helm ConfigMap/replicas.
-# Key Vault → CSI at pod start (not tfvars). Portal is source of truth after Terraform seed (devops/README.md).
+# Key Vault → CSI at pod start (not tfvars). After KV edits: bump cnip/helm/deployment_reload_trigger in App Config, then redeploy (devops/README.md).
 # When not using USE_TERRAFORM_OUTPUTS: set secret APP_CONFIGURATION_NAME (App Configuration store name).
 # Optional mode: set environment variable USE_TERRAFORM_OUTPUTS=true to read deploy values from Terraform remote state outputs
 # (requires TF_STATE_* secrets and TERRAFORM_USE_REMOTE_STATE=true on that environment).

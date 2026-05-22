@@ -18,6 +18,7 @@ spec:
         app.kubernetes.io/component: frontend
         app.kubernetes.io/instance: {{ .Release.Name }}
       annotations:
+        {{- include "cnip.reloadTriggerAnnotation" . | nindent 8 }}
         cnip/frontend-images-refresh-interval-seconds: {{ .Values.frontend.imagesRefreshIntervalSeconds | quote }}
     spec:
       {{- with .Values.imagePullSecrets }}

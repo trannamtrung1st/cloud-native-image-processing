@@ -23,6 +23,7 @@ locals {
     "cnip/helm/frontend_replica_count"                   = tostring(var.cnip_app_settings.helm.frontend_replica_count)
     "cnip/helm/application_insights_enabled"             = var.cnip_app_settings.helm.application_insights_enabled ? "true" : "false"
     "cnip/helm/frontend_images_refresh_interval_seconds" = var.cnip_app_settings.helm.frontend_images_refresh_interval_seconds
+    "cnip/helm/deployment_reload_trigger"                = var.cnip_app_settings.helm.deployment_reload_trigger
   }
 }
 

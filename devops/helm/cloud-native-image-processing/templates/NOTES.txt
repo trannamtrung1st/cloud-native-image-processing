@@ -10,4 +10,5 @@
 4. Build the frontend image with VITE_API_BASE_URL pointing at the public URL where /api is served (same scheme+host as Ingress, e.g. http://cnip.demo.local for defaults).
 {{- if .Values.keyVault.enabled }}
 5. On Azure AKS, app ConfigMap settings and replica counts are usually supplied via appconfig.overrides.yaml from Azure App Configuration (see devops/README.md).
+6. After Key Vault secret changes: bump App Configuration key cnip/helm/deployment_reload_trigger, then redeploy so pods restart and reload cnip-app-secrets.
 {{- end }}

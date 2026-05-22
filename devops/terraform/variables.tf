@@ -150,6 +150,7 @@ variable "cnip_app_settings" {
       frontend_replica_count                   = number
       application_insights_enabled             = bool
       frontend_images_refresh_interval_seconds = string
+      deployment_reload_trigger                = string
     })
   })
   default = {
@@ -177,6 +178,7 @@ variable "cnip_app_settings" {
       frontend_replica_count                   = 1
       application_insights_enabled             = true
       frontend_images_refresh_interval_seconds = "5"
+      deployment_reload_trigger                = "1"
     }
   }
 }

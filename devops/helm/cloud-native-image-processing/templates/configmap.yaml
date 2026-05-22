@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "cnip.labels" . | nindent 4 }}
 data:
+  # Not used by app logic; bump via App Configuration cnip/helm/deployment_reload_trigger to force a rollout with fresh Key Vault CSI secret.
+  CNIP_DEPLOYMENT_RELOAD_TRIGGER: {{ (.Values.deploymentReloadTrigger | default "1") | toString | quote }}
   ASPNETCORE_ENVIRONMENT: {{ .Values.config.aspnetcoreEnvironment | quote }}
   DOTNET_ENVIRONMENT: {{ .Values.config.dotnetEnvironment | quote }}
   BlobStorage__ContainerName: {{ .Values.config.blobStorage.containerName | quote }}

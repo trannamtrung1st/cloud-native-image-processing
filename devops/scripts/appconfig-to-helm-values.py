@@ -131,6 +131,7 @@ def write_helm_overrides(keys: dict[str, str], output: Path) -> None:
             "frontend:",
             f"  replicaCount: {parse_int_setting(keys.get(f'{helm_prefix}frontend_replica_count', ''), '1')}",
             f"  imagesRefreshIntervalSeconds: {yaml_config_string(keys.get(f'{helm_prefix}frontend_images_refresh_interval_seconds', ''), '5')}",
+            f"deploymentReloadTrigger: {yaml_config_string(keys.get(f'{helm_prefix}deployment_reload_trigger', ''), '1')}",
         ]
     )
 
