@@ -1,0 +1,52 @@
+name: Load Terraform backend (TERRAFORM_STATE)
+description: Parse TERRAFORM_STATE JSON and export backend fields to GITHUB_ENV for terraform init and az CLI.
+inputs:
+  terraform_state:
+    description: >
+      JSON object with resource_group_name, storage_account_name, container_name, and key
+      (GitHub environment variable TERRAFORM_STATE).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Parse TERRAFORM_STATE
+      shell: bash
+      env:
+        TERRAFORM_STATE: ${{ inputs.terraform_state }}
+      run: |
+        set -euo pipefail
+        if [ -z "${TERRAFORM_STATE}" ]; then
+          echo "::error::Set environment variable TERRAFORM_STATE (JSON). See devops/terraform/terraform-state.github.json.example"
+          exit 1
+        fi
+        python3 - <<'PY'
+        import json, os, sys
+
+        raw = os.environ["TERRAFORM_STATE"]
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            print(f"::error::TERRAFORM_STATE must be valid JSON: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(obj, dict):
+            print("::error::TERRAFORM_STATE must be a JSON object", file=sys.stderr)
+            sys.exit(1)
+
+        fields = {
+            "resource_group_name": "TF_STATE_RG",
+            "storage_account_name": "TF_STATE_SA",
+            "container_name": "TF_STATE_CONTAINER",
+            "key": "TF_STATE_KEY",
+        }
+        for json_key, env_key in fields.items():
+            value = obj.get(json_key)
+            if value is None or not str(value).strip():
+                print(
+                    f"::error::TERRAFORM_STATE missing or empty field: {json_key}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            print(f"{env_key}={value}")
+        PY | while IFS= read -r line; do
+          echo "$line" >> "${GITHUB_ENV}"
+        done

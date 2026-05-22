@@ -1,0 +1,6 @@
+{
+  "resource_group_name": "cnip-terraform",
+  "storage_account_name": "cnipsatrungtran",
+  "container_name": "cnip-terraform",
+  "key": "production/tf.state"
+}

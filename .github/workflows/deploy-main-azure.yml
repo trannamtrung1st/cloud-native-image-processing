@@ -9,16 +9,13 @@
 #
 # OIDC: federated credential on your app registration must allow the ref that runs the job (e.g. `refs/heads/main`, `refs/heads/develop`).
 #
-# Prerequisites (README §1): Azure AD app with AcrPush + AKS get-credentials access; populate **environment** secrets from Terraform output.
+# Prerequisites (README §1): Azure AD app with AcrPush + AKS get-credentials access.
 #
-# Typical environment secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME, CNIP_ACR_LOGIN_SERVER,
-# CNIP_PUBLIC_APP_URL, AKS_RESOURCE_GROUP, AKS_CLUSTER_NAME, KEY_VAULT_NAME, WORKLOAD_IDENTITY_CLIENT_ID.
-# Typical environment variables: K8S_NAMESPACE (optional, default cnip).
-# Runtime config: live App Configuration → appconfig-to-helm-values.py → Helm ConfigMap/replicas.
-# Key Vault → CSI at pod start (not tfvars). After KV edits: bump cnip/helm/deployment_reload_trigger in App Config, then redeploy (devops/README.md).
-# When not using USE_TERRAFORM_OUTPUTS: set secret APP_CONFIGURATION_NAME (App Configuration store name).
-# Optional mode: set environment variable USE_TERRAFORM_OUTPUTS=true to read deploy values from Terraform remote state outputs
-# (requires TF_STATE_* secrets and TERRAFORM_USE_REMOTE_STATE=true on that environment).
+# Environment variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, TERRAFORM_STATE (JSON),
+#   TERRAFORM_USE_REMOTE_STATE=true, USE_TERRAFORM_OUTPUTS=true (recommended), K8S_NAMESPACE (optional).
+# TERRAFORM_STATE parsed via .github/actions/load-terraform-backend before terraform output / init.
+# When USE_TERRAFORM_OUTPUTS is not true: optional vars ACR_NAME, CNIP_ACR_LOGIN_SERVER, AKS_*, KEY_VAULT_NAME, etc.
+# Runtime config: App Configuration → appconfig-to-helm-values.py → Helm. Key Vault → CSI at pod start.
 #
 # Infrastructure: use `terraform-manual.yml` (same branch → environment mapping).
 
@@ -72,9 +69,9 @@ jobs:
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set image tag
         id: tag
@@ -92,13 +89,14 @@ jobs:
           terraform_version: 1.5.0
           terraform_wrapper: false
 
+      - name: Load Terraform backend (TERRAFORM_STATE)
+        if: ${{ vars.USE_TERRAFORM_OUTPUTS == 'true' }}
+        uses: ./.github/actions/load-terraform-backend
+        with:
+          terraform_state: ${{ vars.TERRAFORM_STATE }}
+
       - name: Resolve deploy values from Terraform outputs
         if: ${{ vars.USE_TERRAFORM_OUTPUTS == 'true' }}
-        env:
-          TF_STATE_RG: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
-          TF_STATE_SA: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
-          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
-          TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
         run: |
           set -euo pipefail
           tf_output_raw() {
@@ -114,10 +112,6 @@ jobs:
             return 1
           }
           [ "${{ vars.TERRAFORM_USE_REMOTE_STATE }}" = "true" ] || { echo "Set TERRAFORM_USE_REMOTE_STATE=true for this environment."; exit 1; }
-          test -n "${TF_STATE_RG}" || { echo "Missing TF_STATE_RESOURCE_GROUP secret"; exit 1; }
-          test -n "${TF_STATE_SA}" || { echo "Missing TF_STATE_STORAGE_ACCOUNT secret"; exit 1; }
-          test -n "${TF_STATE_CONTAINER}" || { echo "Missing TF_STATE_CONTAINER secret"; exit 1; }
-          test -n "${TF_STATE_KEY}" || { echo "Missing TF_STATE_KEY secret"; exit 1; }
           cat > devops/terraform/backend.ci.tf <<'EOF'
           terraform {
             backend "azurerm" {}
@@ -128,11 +122,11 @@ jobs:
             -backend-config="storage_account_name=${TF_STATE_SA}" \
             -backend-config="container_name=${TF_STATE_CONTAINER}" \
             -backend-config="key=${TF_STATE_KEY}" \
-            -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
-            -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -backend-config="subscription_id=${{ vars.AZURE_SUBSCRIPTION_ID }}" \
+            -backend-config="tenant_id=${{ vars.AZURE_TENANT_ID }}" \
             -backend-config="use_oidc=true" \
             -backend-config="use_azuread_auth=true" \
-            -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}"
+            -backend-config="client_id=${{ vars.AZURE_CLIENT_ID }}"
           ACR_NAME="$(tf_output_raw acr_name)"
           CNIP_ACR_LOGIN_SERVER="$(tf_output_raw acr_login_server)"
           AKS_RESOURCE_GROUP="$(tf_output_raw resource_group_name)"
@@ -161,11 +155,11 @@ jobs:
 
       - name: Generate Helm overrides from App Configuration
         env:
-          APP_CONFIGURATION_NAME: ${{ env.APP_CONFIGURATION_NAME || secrets.APP_CONFIGURATION_NAME }}
+          APP_CONFIGURATION_NAME: ${{ env.APP_CONFIGURATION_NAME || vars.APP_CONFIGURATION_NAME }}
         run: |
           set -euo pipefail
           test -n "${APP_CONFIGURATION_NAME}" || {
-            echo "Set APP_CONFIGURATION_NAME (environment secret) or USE_TERRAFORM_OUTPUTS=true after Terraform apply."
+            echo "Set APP_CONFIGURATION_NAME (environment variable) or USE_TERRAFORM_OUTPUTS=true after Terraform apply."
             exit 1
           }
           python3 devops/scripts/appconfig-to-helm-values.py \
@@ -176,13 +170,13 @@ jobs:
           echo "CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS=${FRONTEND_REFRESH}" >> "${GITHUB_ENV}"
 
       - name: ACR login
-        run: az acr login -n "${ACR_NAME:-${{ secrets.ACR_NAME }}}"
+        run: az acr login -n "${ACR_NAME:-${{ vars.ACR_NAME }}}"
 
       - name: Build and push images
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_build == true) }}
         env:
-          CNIP_ACR_LOGIN_SERVER: ${{ env.CNIP_ACR_LOGIN_SERVER || secrets.CNIP_ACR_LOGIN_SERVER }}
-          CNIP_PUBLIC_APP_URL: ${{ env.CNIP_PUBLIC_APP_URL || secrets.CNIP_PUBLIC_APP_URL }}
+          CNIP_ACR_LOGIN_SERVER: ${{ env.CNIP_ACR_LOGIN_SERVER || vars.CNIP_ACR_LOGIN_SERVER }}
+          CNIP_PUBLIC_APP_URL: ${{ env.CNIP_PUBLIC_APP_URL || vars.CNIP_PUBLIC_APP_URL }}
           CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS: ${{ env.CNIP_FRONTEND_IMAGES_REFRESH_INTERVAL_SECONDS || '5' }}
           CNIP_IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
@@ -193,8 +187,8 @@ jobs:
       - name: Configure kubectl for AKS (Helm)
         run: |
           az aks get-credentials \
-            --resource-group "${AKS_RESOURCE_GROUP:-${{ secrets.AKS_RESOURCE_GROUP }}}" \
-            --name "${AKS_CLUSTER_NAME:-${{ secrets.AKS_CLUSTER_NAME }}}" \
+            --resource-group "${AKS_RESOURCE_GROUP:-${{ vars.AKS_RESOURCE_GROUP }}}" \
+            --name "${AKS_CLUSTER_NAME:-${{ vars.AKS_CLUSTER_NAME }}}" \
             --overwrite-existing
 
       - name: Install Helm
@@ -224,7 +218,7 @@ jobs:
             --set-string aiWorker.image.tag="${CNIP_IMAGE_TAG}" \
             --set-string frontend.image.tag="${CNIP_IMAGE_TAG}" \
             --set keyVault.enabled=true \
-            --set-string acrLoginServer="${CNIP_ACR_LOGIN_SERVER:-${{ secrets.CNIP_ACR_LOGIN_SERVER }}}" \
-            --set-string keyVault.tenantId="${{ secrets.AZURE_TENANT_ID }}" \
-            --set-string keyVault.vaultName="${KEY_VAULT_NAME:-${{ secrets.KEY_VAULT_NAME }}}" \
-            --set-string keyVault.workloadIdentityClientId="${WORKLOAD_IDENTITY_CLIENT_ID:-${{ secrets.WORKLOAD_IDENTITY_CLIENT_ID }}}"
+            --set-string acrLoginServer="${CNIP_ACR_LOGIN_SERVER:-${{ vars.CNIP_ACR_LOGIN_SERVER }}}" \
+            --set-string keyVault.tenantId="${{ vars.AZURE_TENANT_ID }}" \
+            --set-string keyVault.vaultName="${KEY_VAULT_NAME:-${{ vars.KEY_VAULT_NAME }}}" \
+            --set-string keyVault.workloadIdentityClientId="${WORKLOAD_IDENTITY_CLIENT_ID:-${{ vars.WORKLOAD_IDENTITY_CLIENT_ID }}}"

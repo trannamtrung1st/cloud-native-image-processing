@@ -131,25 +131,29 @@ Same as step 5, but choose `Storage Blob Data Owner` role and no need conditions
    | -------------------------- | -------------- |
    | TERRAFORM_USE_REMOTE_STATE | true           |
    | USE_TERRAFORM_OUTPUTS      | true           |
-   | TERRAFORM_CONFIG_TFVARS    | Full text of [`config.auto.tfvars.example`](devops/terraform/config.auto.tfvars.example) — infra only (`resource_group_name`, `prefix`, AKS, monitor, `key_vault_additional_admin_principal_ids`). |
-   | TERRAFORM_APP_TFVARS       | Full text of [`app.auto.tfvars.example`](devops/terraform/app.auto.tfvars.example) — initial `cnip_app_settings` (CORS, replicas, demo delays). After apply, edit in Azure Portal. |
+   | AZURE_CLIENT_ID            | App registration → **Application (client) ID** |
+   | AZURE_TENANT_ID            | **Tenant ID** |
+   | AZURE_SUBSCRIPTION_ID      | **Subscription ID** |
+   | TERRAFORM_STATE            | One-line JSON from [`terraform-state.github.json.example`](devops/terraform/terraform-state.github.json.example) (set your unique `storage_account_name`) |
+   | TERRAFORM_CONFIG_TFVARS    | Full text of [`config.auto.tfvars.example`](devops/terraform/config.auto.tfvars.example) |
+   | TERRAFORM_APP_TFVARS       | Full text of [`app.auto.tfvars.example`](devops/terraform/app.auto.tfvars.example) |
+
+Example `TERRAFORM_STATE`:
+
+```json
+{"resource_group_name":"cnip-terraform","storage_account_name":"cnipsatrungtran","container_name":"cnip-terraform","key":"production/tf.state"}
+```
 
 ### Step 12: Setup Actions environment secrets:
 1. In the environment `Production` page, find `Environment secrets` section
-2. Click on add new button
-3. Add new secrets:
-   | Secret Name                  | Secret Value                                                                                                             |
-   | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-   | AZURE_CLIENT_ID              | `Microsoft Entra ID` -> `App Registrations` -> `All applications` -> click on your app -> copy `Application (client) ID` |
-   | AZURE_TENANT_ID              | `Microsoft Entra ID` -> copy `Tenant ID`                                                                                 |
-   | AZURE_SUBSCRIPTION_ID        | `Subscriptions` -> go to your newly created subscription -> copy `Subscription ID`                                       |
-   | TERRAFORM_VAULT_SECRETS_TFVARS | Full text of [`vault-secrets.auto.tfvars.example`](devops/terraform/vault-secrets.auto.tfvars.example) — `cnip_vault_secrets_init` (optional Computer Vision). After apply, edit secrets in Key Vault Portal. |
-   | TF_STATE_CONTAINER           | `cnip-terraform`                                                                                                         |
-   | TF_STATE_KEY                 | `production/tf.state`                                                                                                    |
-   | TF_STATE_RESOURCE_GROUP      | `cnip-terraform`                                                                                                         |
-   | TF_STATE_STORAGE_ACCOUNT     | `<random-storage-account-name>`, from 3-24 lowercase letters and numbers (e.g. `cnipsatrungtran`)                        |
+2. Add only:
+   | Secret Name                  | Secret Value |
+   | ---------------------------- | ------------ |
+   | TERRAFORM_VAULT_SECRETS_TFVARS | Full text of [`vault-secrets.auto.tfvars.example`](devops/terraform/vault-secrets.auto.tfvars.example) |
 
-If you previously used **`TERRAFORM_TFVARS`**, **`TERRAFORM_SECRETS_TFVARS`**, or **`KEYVAULT_ADMIN_PRINCIPAL_IDS`**, migrate to the three tfvars above (see [`devops/README.md`](devops/README.md#configuration-three-tfvars--portal)).
+Workflows parse `TERRAFORM_STATE` via [`.github/actions/load-terraform-backend`](.github/actions/load-terraform-backend) before `terraform init` and `az` bootstrap commands.
+
+If you previously used **`TF_STATE_*`** or **`AZURE_*`** secrets, migrate per [`devops/README.md`](devops/README.md#github-actions-ci).
    
 ### Step 13: Run Terraform workflow to provision Azure resources:
 1. Go to `Actions`

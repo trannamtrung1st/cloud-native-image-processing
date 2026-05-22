@@ -3,11 +3,10 @@
 # Same branch → GitHub Environment mapping as terraform-manual.yml:
 #   main → Production, develop → Staging, other → Development
 #
-# Does NOT delete the Terraform state storage account/container (TF_STATE_*). State file remains for audit/re-apply.
-# Recommended: scale down or uninstall Helm release first; destroy removes AKS and data plane resources in state.
+# Does NOT delete the storage account in TERRAFORM_STATE. State blob remains for audit/re-apply.
+# Backend JSON parsed via .github/actions/load-terraform-backend (same as Terraform manual).
 #
-# Required on the target environment: same secrets/variables as Terraform (manual) — TERRAFORM_USE_REMOTE_STATE=true,
-# TF_STATE_*, AZURE_*, TERRAFORM_CONFIG_TFVARS, TERRAFORM_APP_TFVARS, TERRAFORM_VAULT_SECRETS_TFVARS.
+# Required: same environment variables/secrets as Terraform (manual).
 
 name: Terraform (destroy)
 
@@ -44,9 +43,9 @@ jobs:
         working-directory: devops/terraform
     env:
       ARM_USE_OIDC: true
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       TF_CLI_ARGS_plan: "-parallelism=10"
       TF_CLI_ARGS_destroy: "-parallelism=10"
     steps:
@@ -57,9 +56,9 @@ jobs:
         if: ${{ vars.TERRAFORM_USE_REMOTE_STATE == 'true' }}
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform destroy workflow context
         run: |
@@ -88,18 +87,10 @@ jobs:
           echo "On GitHub Environment \"${TARGET_GITHUB_ENVIRONMENT}\", set variable TERRAFORM_USE_REMOTE_STATE=true before running destroy."
           exit 1
 
-      - name: Validate state backend secrets
-        env:
-          TF_STATE_RG: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
-          TF_STATE_SA: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
-          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
-          TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "${TF_STATE_RG}" || (echo "Missing environment secret TF_STATE_RESOURCE_GROUP"; exit 1)
-          test -n "${TF_STATE_SA}" || (echo "Missing environment secret TF_STATE_STORAGE_ACCOUNT"; exit 1)
-          test -n "${TF_STATE_CONTAINER}" || (echo "Missing environment secret TF_STATE_CONTAINER"; exit 1)
-          test -n "${TF_STATE_KEY}" || (echo "Missing environment secret TF_STATE_KEY"; exit 1)
+      - name: Load Terraform backend (TERRAFORM_STATE)
+        uses: ./.github/actions/load-terraform-backend
+        with:
+          terraform_state: ${{ vars.TERRAFORM_STATE }}
 
       - name: Write config.auto.tfvars from environment variable
         env:
@@ -161,11 +152,6 @@ jobs:
           terraform_version: 1.5.0
 
       - name: Terraform init (Azure Storage backend, OIDC)
-        env:
-          TF_STATE_RG: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
-          TF_STATE_SA: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
-          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
-          TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
         run: |
           set -euo pipefail
           terraform init -input=false -no-color \
@@ -197,5 +183,5 @@ jobs:
       - name: Destroy complete (state backend retained)
         if: ${{ inputs.action == 'destroy' && success() }}
         run: |
-          echo "Terraform destroy finished. Remote state blob is unchanged (TF_STATE_* storage is not deleted)."
+          echo "Terraform destroy finished. Remote state blob is unchanged (TERRAFORM_STATE storage is not deleted)."
           echo "To reprovision: run Terraform (manual) apply on this environment."

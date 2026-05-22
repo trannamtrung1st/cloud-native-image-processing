@@ -3,7 +3,7 @@
 # Also copy: app.auto.tfvars.example → app.auto.tfvars
 #            vault-secrets.auto.tfvars.example → vault-secrets.auto.tfvars
 # App settings and vault secret VALUES are seeded once, then managed in Azure Portal.
-# CI variable: TERRAFORM_CONFIG_TFVARS (full file content). Docs: README.md in this folder.
+# CI variable: TERRAFORM_CONFIG_TFVARS. Remote state: TERRAFORM_STATE JSON (terraform-state.github.json.example).
 
 resource_group_name = "cnip-rs-group"
 location            = "southeastasia"

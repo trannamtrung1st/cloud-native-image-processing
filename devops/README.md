@@ -2,21 +2,21 @@
 
 Single guide for **local Docker Compose** and **production on Azure (Terraform + Helm)**. Helm on Azure uses **Key Vault + workload identity + CSI** only—no manual `kubectl create secret` for app credentials.
 
-| Path | Purpose |
-|------|---------|
-| [`terraform/`](terraform/) | Azure: RG, ACR, AKS, data plane, Key Vault, **App Configuration**, monitoring, optional ingress / Front Door — see [`terraform/README.md`](terraform/README.md) |
-| [`scripts/`](scripts/) | [`export-compose-env-from-terraform.sh`](scripts/export-compose-env-from-terraform.sh), [`appconfig-to-helm-values.py`](scripts/appconfig-to-helm-values.py) |
-| [`helm/cloud-native-image-processing/`](helm/cloud-native-image-processing/) | Chart: API, workers, optional frontend |
+| Path                                                                         | Purpose                                                                                                                                                         |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`terraform/`](terraform/)                                                   | Azure: RG, ACR, AKS, data plane, Key Vault, **App Configuration**, monitoring, optional ingress / Front Door — see [`terraform/README.md`](terraform/README.md) |
+| [`scripts/`](scripts/)                                                       | [`export-compose-env-from-terraform.sh`](scripts/export-compose-env-from-terraform.sh), [`appconfig-to-helm-values.py`](scripts/appconfig-to-helm-values.py)    |
+| [`helm/cloud-native-image-processing/`](helm/cloud-native-image-processing/) | Chart: API, workers, optional frontend                                                                                                                          |
 
 ---
 
 ## Configuration (three tfvars + portal)
 
-| Layer | Tfvars file | Terraform | Runtime source |
-|-------|-------------|-----------|----------------|
-| **Infra** | `config.auto.tfvars` | Creates/updates Azure resources | N/A |
-| **App settings** | `app.auto.tfvars` | Seeds App Configuration keys once | **Azure Portal** → deploy reads App Config → Helm ConfigMap + replicas |
-| **Vault secrets** | `vault-secrets.auto.tfvars` | Seeds Key Vault secret values once | **Azure Portal** → Helm CSI syncs KV → pod `envFrom` |
+| Layer             | Tfvars file                 | Terraform                          | Runtime source                                                         |
+| ----------------- | --------------------------- | ---------------------------------- | ---------------------------------------------------------------------- |
+| **Infra**         | `config.auto.tfvars`        | Creates/updates Azure resources    | N/A                                                                    |
+| **App settings**  | `app.auto.tfvars`           | Seeds App Configuration keys once  | **Azure Portal** → deploy reads App Config → Helm ConfigMap + replicas |
+| **Vault secrets** | `vault-secrets.auto.tfvars` | Seeds Key Vault secret values once | **Azure Portal** → Helm CSI syncs KV → pod `envFrom`                   |
 
 Terraform does **not** overwrite App Configuration or Key Vault **values** after the first apply (`ignore_changes`). Change them in Azure Portal; redeploy to pick up App Config changes in Helm.
 
@@ -32,21 +32,24 @@ Terraform does **not** overwrite App Configuration or Key Vault **values** after
 
 Branch → environment: `main` → **Production**, `develop` → **Staging**, other → **Development**.
 
-| Name | Type | Used by |
-|------|------|---------|
-| `TERRAFORM_USE_REMOTE_STATE` | Variable | Terraform + Deploy (must be `true` for CI) |
-| `USE_TERRAFORM_OUTPUTS` | Variable | Deploy — read ACR/AKS/KV/App Config name from remote state |
-| `TERRAFORM_CONFIG_TFVARS` | Variable | Terraform — `config.auto.tfvars` (infra) |
-| `TERRAFORM_APP_TFVARS` | Variable | Terraform — `app.auto.tfvars` (app settings seed) |
-| `TERRAFORM_VAULT_SECRETS_TFVARS` | Secret | Terraform — `vault-secrets.auto.tfvars` (KV secret seed) |
-| `TF_STATE_*` | Secrets | Terraform + Deploy remote state |
-| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Secrets | Terraform + Deploy OIDC |
-| `K8S_NAMESPACE` | Variable (optional) | Deploy Helm namespace (default `cnip`) |
-| `APP_CONFIGURATION_NAME` | Secret (optional) | Deploy only if `USE_TERRAFORM_OUTPUTS` is not `true` |
+| Name                                                                                                     | Type                 | Used by                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TERRAFORM_USE_REMOTE_STATE`                                                                             | Variable             | Terraform + Deploy (must be `true` for CI)                                                                                                                                                                       |
+| `TERRAFORM_STATE`                                                                                        | Variable (JSON)      | Terraform + Deploy — parsed by [`.github/actions/load-terraform-backend`](../.github/actions/load-terraform-backend); see [`terraform-state.github.json.example`](terraform/terraform-state.github.json.example) |
+| `USE_TERRAFORM_OUTPUTS`                                                                                  | Variable             | Deploy — read ACR/AKS/KV/App Config from remote state (recommended `true`)                                                                                                                                       |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`                                            | Variables            | Terraform + Deploy OIDC                                                                                                                                                                                          |
+| `TERRAFORM_CONFIG_TFVARS`                                                                                | Variable             | Terraform — `config.auto.tfvars` (infra)                                                                                                                                                                         |
+| `TERRAFORM_APP_TFVARS`                                                                                   | Variable             | Terraform — `app.auto.tfvars` (app settings seed)                                                                                                                                                                |
+| `TF_STATE_LOCATION`                                                                                      | Variable (optional)  | Terraform bootstrap only (default `southeastasia`)                                                                                                                                                               |
+| `K8S_NAMESPACE`                                                                                          | Variable (optional)  | Deploy Helm namespace (default `cnip`)                                                                                                                                                                           |
+| `TERRAFORM_VAULT_SECRETS_TFVARS`                                                                         | Secret               | Terraform — `vault-secrets.auto.tfvars` (Computer Vision keys, etc.)                                                                                                                                             |
+| `ACR_NAME`, `CNIP_*`, `AKS_*`, `KEY_VAULT_NAME`, `WORKLOAD_IDENTITY_CLIENT_ID`, `APP_CONFIGURATION_NAME` | Variables (optional) | Deploy fallbacks when `USE_TERRAFORM_OUTPUTS` is not `true`                                                                                                                                                      |
+
+**Migrating:** replace four `TF_STATE_*` secrets + `AZURE_*` secrets with variables; add one `TERRAFORM_STATE` JSON variable.
 
 Deploy [`.github/workflows/deploy-main-azure.yml`](../.github/workflows/deploy-main-azure.yml): **App Configuration** → `appconfig.overrides.yaml` → Helm; **Key Vault** → CSI at pod start (not tfvars).
 
-**Teardown:** [`.github/workflows/terraform-destroy.yml`](../.github/workflows/terraform-destroy.yml) — `plan-destroy` to preview, `destroy` with confirmation `destroy`. Uses the same environment secrets/variables as Terraform (manual). Does not delete the `TF_STATE_*` storage account. Optionally uninstall the Helm release first (`helm uninstall cnip -n cnip`).
+**Teardown:** [`.github/workflows/terraform-destroy.yml`](../.github/workflows/terraform-destroy.yml) — `plan-destroy` / `destroy` (confirmation `destroy`). Does not delete the storage account in `TERRAFORM_STATE`.
 
 ---
 
@@ -191,18 +194,18 @@ kubectl get pods,svc,ingress -n "$K8S_NAMESPACE"
 
 ## Optional reference
 
-| Topic | Notes |
-|-------|--------|
-| Ingress without Terraform | Set `enable_public_nginx_ingress = false` and install [ingress-nginx](https://kubernetes.github.io/ingress-nginx/deploy/) manually (see optional step in §1). |
-| Terraform outputs | `terraform -chdir=devops/terraform output` — connection strings, Key Vault name, ingress URL, ACR. |
-| Remote state | Local: default backend. CI: Azure Storage — set `TERRAFORM_USE_REMOTE_STATE` and `TF_STATE_*` (see [GitHub Actions](#github-actions-ci)). |
-| Destroy | `cd devops/terraform && terraform destroy` |
-| Front Door / WAF | `enable_azure_front_door` in `config.auto.tfvars`; align Helm ingress/CORS with `terraform output -raw cdn_frontdoor_endpoint_url`. |
-| App / Helm config | `app.auto.tfvars` seeds App Config; edit in Portal; deploy reads into `appconfig.overrides.yaml`. |
-| Vault secrets | `vault-secrets.auto.tfvars` seeds optional secrets; platform strings seeded once; edit in Portal. |
-| TLS | e.g. cert-manager + `ingress.tls` in values. |
-| API replicas > 1 | Shared Data Protection keys required — see chart comments / backend docs. |
-| AKS diagnostic settings | One Terraform setting `{prefix}-aks-diag` when `enable_azure_monitor=true`. If apply fails with “limit of 5”, delete extra settings on the cluster in Portal (Monitoring → Diagnostic settings). |
+| Topic                     | Notes                                                                                                                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ingress without Terraform | Set `enable_public_nginx_ingress = false` and install [ingress-nginx](https://kubernetes.github.io/ingress-nginx/deploy/) manually (see optional step in §1).                                    |
+| Terraform outputs         | `terraform -chdir=devops/terraform output` — connection strings, Key Vault name, ingress URL, ACR.                                                                                               |
+| Remote state              | Local: default backend. CI: `TERRAFORM_USE_REMOTE_STATE` + `TERRAFORM_STATE` JSON (see [GitHub Actions](#github-actions-ci)).                                                                    |
+| Destroy                   | `cd devops/terraform && terraform destroy`                                                                                                                                                       |
+| Front Door / WAF          | `enable_azure_front_door` in `config.auto.tfvars`; align Helm ingress/CORS with `terraform output -raw cdn_frontdoor_endpoint_url`.                                                              |
+| App / Helm config         | `app.auto.tfvars` seeds App Config; edit in Portal; deploy reads into `appconfig.overrides.yaml`.                                                                                                |
+| Vault secrets             | `vault-secrets.auto.tfvars` seeds optional secrets; platform strings seeded once; edit in Portal.                                                                                                |
+| TLS                       | e.g. cert-manager + `ingress.tls` in values.                                                                                                                                                     |
+| API replicas > 1          | Shared Data Protection keys required — see chart comments / backend docs.                                                                                                                        |
+| AKS diagnostic settings   | One Terraform setting `{prefix}-aks-diag` when `enable_azure_monitor=true`. If apply fails with “limit of 5”, delete extra settings on the cluster in Portal (Monitoring → Diagnostic settings). |
 
 **End-to-end flow:** three tfvars → Terraform (infra + seed KV/App Config) → Portal owns values → deploy: App Config → Helm ConfigMap/replicas; Key Vault → CSI → `envFrom` on pods.
 
@@ -216,39 +219,39 @@ After the first successful `terraform apply`, treat **tfvars as bootstrap only**
 
 Portal: **App Configuration** → your store (`terraform output -raw app_configuration_name`) → **Configuration explorer** → filter **Label** = `cnip`. Your user needs **App Configuration Data Owner** (included if your Object ID is in `key_vault_additional_admin_principal_ids` in `config.auto.tfvars`).
 
-| Key | Helm / app effect |
-|-----|-------------------|
-| `cnip/app/aspnetcore_environment` | ConfigMap `ASPNETCORE_ENVIRONMENT` |
-| `cnip/app/dotnet_environment` | ConfigMap `DOTNET_ENVIRONMENT` |
-| `cnip/app/blob_container_name` | `BlobStorage__ContainerName` |
-| `cnip/app/eventhub_*` | Event hub names / consumer groups |
-| `cnip/app/demo_*` | Demo delay env vars |
-| `cnip/app/upload_max_request_body_bytes` | Upload limit |
-| `cnip/app/identity_bearer_token_hours` | Token TTL |
-| `cnip/app/redis_details_expiration_minutes` | Redis cache TTL |
-| `cnip/app/cors_allowed_origins` | JSON array string, e.g. `["https://my.host"]` |
-| `cnip/helm/api_replica_count` | `api.replicaCount` |
-| `cnip/helm/worker_replica_count` | `worker.replicaCount` |
-| `cnip/helm/ai_worker_replica_count` | `aiWorker.replicaCount` |
-| `cnip/helm/frontend_replica_count` | `frontend.replicaCount` |
-| `cnip/helm/application_insights_enabled` | `true` or `false` |
-| `cnip/helm/frontend_images_refresh_interval_seconds` | Frontend poll interval (also used at image build in CI) |
-| `cnip/helm/deployment_reload_trigger` | Bump (e.g. `1` → `2`) then redeploy to restart pods and reload Key Vault secrets from `cnip-app-secrets` |
+| Key                                                  | Helm / app effect                                                                                        |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `cnip/app/aspnetcore_environment`                    | ConfigMap `ASPNETCORE_ENVIRONMENT`                                                                       |
+| `cnip/app/dotnet_environment`                        | ConfigMap `DOTNET_ENVIRONMENT`                                                                           |
+| `cnip/app/blob_container_name`                       | `BlobStorage__ContainerName`                                                                             |
+| `cnip/app/eventhub_*`                                | Event hub names / consumer groups                                                                        |
+| `cnip/app/demo_*`                                    | Demo delay env vars                                                                                      |
+| `cnip/app/upload_max_request_body_bytes`             | Upload limit                                                                                             |
+| `cnip/app/identity_bearer_token_hours`               | Token TTL                                                                                                |
+| `cnip/app/redis_details_expiration_minutes`          | Redis cache TTL                                                                                          |
+| `cnip/app/cors_allowed_origins`                      | JSON array string, e.g. `["https://my.host"]`                                                            |
+| `cnip/helm/api_replica_count`                        | `api.replicaCount`                                                                                       |
+| `cnip/helm/worker_replica_count`                     | `worker.replicaCount`                                                                                    |
+| `cnip/helm/ai_worker_replica_count`                  | `aiWorker.replicaCount`                                                                                  |
+| `cnip/helm/frontend_replica_count`                   | `frontend.replicaCount`                                                                                  |
+| `cnip/helm/application_insights_enabled`             | `true` or `false`                                                                                        |
+| `cnip/helm/frontend_images_refresh_interval_seconds` | Frontend poll interval (also used at image build in CI)                                                  |
+| `cnip/helm/deployment_reload_trigger`                | Bump (e.g. `1` → `2`) then redeploy to restart pods and reload Key Vault secrets from `cnip-app-secrets` |
 
 ### Key Vault secrets
 
 Portal: **Key Vault** → **Secrets** (`terraform output -raw key_vault_name`). Helm does not read these at deploy time; the **Secrets Store CSI** driver syncs them into Kubernetes secret `cnip-app-secrets`.
 
-| Secret name | Set by |
-|-------------|--------|
-| `postgres-connection-string` | Terraform (first apply); edit in Portal if needed |
-| `blob-storage-connection-string` | Terraform (first apply) |
-| `eventhub-connection-string-image-processing` | Terraform (first apply) |
-| `eventhub-connection-string-ai-description` | Terraform (first apply) |
-| `redis-connection-string` | Terraform (first apply) |
-| `application-insights-connection-string` | Terraform when `enable_application_insights = true` |
-| `computer-vision-endpoint` | Initial `vault-secrets.auto.tfvars`; then Portal |
-| `computer-vision-api-key` | Initial `vault-secrets.auto.tfvars`; then Portal |
+| Secret name                                   | Set by                                              |
+| --------------------------------------------- | --------------------------------------------------- |
+| `postgres-connection-string`                  | Terraform (first apply); edit in Portal if needed   |
+| `blob-storage-connection-string`              | Terraform (first apply)                             |
+| `eventhub-connection-string-image-processing` | Terraform (first apply)                             |
+| `eventhub-connection-string-ai-description`   | Terraform (first apply)                             |
+| `redis-connection-string`                     | Terraform (first apply)                             |
+| `application-insights-connection-string`      | Terraform when `enable_application_insights = true` |
+| `computer-vision-endpoint`                    | Initial `vault-secrets.auto.tfvars`; then Portal    |
+| `computer-vision-api-key`                     | Initial `vault-secrets.auto.tfvars`; then Portal    |
 
 After editing Key Vault secret **values**, wait ~2 minutes for CSI sync (or confirm the Kubernetes secret), then bump **`cnip/helm/deployment_reload_trigger`** in App Configuration and run **Deploy to Azure** (or `appconfig-to-helm-values.py` + `helm upgrade`). That changes Helm checksum annotations and restarts API, workers, AI worker, and frontend so pods pick up the updated `cnip-app-secrets`.
 
